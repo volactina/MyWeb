@@ -26,13 +26,13 @@ jsonTags = ['content', 'type', 'status', 'originalDate', 'updateDate']
 
 fsm = {'statusList':['todo','cancel','in progress','block','suspend','done'],
        'path':[[0,1,1,1,1,0],
-           [0,0,0,0,0,0],
-           [0,1,0,0,1,1],
-           [0,1,0,0,1,0],
-           [0,1,1,0,0,0],
-           [0,0,0,0,0,0]]}
+               [0,0,0,0,0,0],
+               [0,1,0,0,1,1],
+               [0,1,0,0,1,0],
+               [0,1,1,0,0,0],
+               [0,0,0,0,0,0]]}
 
-config = {'patternList':['all','todo','cancel','in progress','block','suspend','done'],'currentPattern':'in progress'}
+defaultConfig = {'patternList':['all','todo','cancel','in progress','block','suspend','done'],'currentPattern':'in progress'}
 
 dbConnected = False
 
@@ -40,12 +40,38 @@ dbConnected = False
 def GetFSM():
     return fsm
 
+'''
+config
+'''
+
 def GetConfig():
+    LocalConfigNeedUpdate = False
+    try:
+        with open("config.json") as file:
+            config = json.load(file)
+        for tag in defaultConfig:
+            if tag not in config:
+                config[tag] = defaultConfig[tag]
+                LocalConfigNeedUpdate = True
+    except FileNotFoundError:
+        config = defaultConfig
+        LocalConfigNeedUpdate = True
+    if LocalConfigNeedUpdate:
+        SetConfig(config)
     return config
 
-def SetConfig(currentPattern):
-    config['currentPattern'] = currentPattern
+def SetConfig(config):
+    with open("config.json","w") as file:
+        json.dump(config, file, indent = 2)
 
+def SetConfigCurrentPattern(currentPattern):
+    config  = GetConfig()
+    config['currentPattern'] = currentPattern
+    SetConfig(config)
+
+'''
+Common Utils
+'''
 def JSon2WebData(jsonText):
     data = json.loads(jsonText)
     return data
@@ -67,35 +93,6 @@ def BuildHistory(old, new):
             newhistory[tag] = new[tag]
     histories.append(newhistory)
     return histories
-            
-
-def Request2JSonWant(request,old):
-    new = {}
-    print(request.form)
-    for tag in jsonTags:
-        if tag in request.form:
-            new[tag] = request.form[tag]
-    if request.form['op'] == 'add':
-        new['status'] = 'todo'
-        new['originalDate'] = time.localtime()
-    elif request.form['op'] == 'update':
-        for tag in old:
-            if tag not in new:
-                new[tag] = old[tag]
-    new['updateDate'] = time.localtime()
-    new['history'] = BuildHistory(old, new)
-    return json.dumps(new)
-
-def Request2JSon(request,old = {}):
-    data = {}
-    # if 'type' not in request.form:
-        # print("no type in request.form")
-        # return json.dumps(data)
-    if ('type' in old and old['type'] == 'want') or ('type' in request.form and request.form['type'] == 'want'):
-        return Request2JSonWant(request,old)
-    else:
-        print("type %s not supported"%request.form['type'])
-    return json.dumps(data)
 
 '''
 DB Operation
@@ -194,6 +191,34 @@ def DelParentList(db, cursor, ID, parentID):
 '''
 Handle Op
 '''
+def Request2JSonWant(request,old):
+    new = {}
+    print(request.form)
+    for tag in jsonTags:
+        if tag in request.form:
+            new[tag] = request.form[tag]
+    if request.form['op'] == 'add':
+        new['status'] = 'todo'
+        new['originalDate'] = time.localtime()
+    elif request.form['op'] == 'update':
+        for tag in old:
+            if tag not in new:
+                new[tag] = old[tag]
+    new['updateDate'] = time.localtime()
+    new['history'] = BuildHistory(old, new)
+    return json.dumps(new)
+
+def Request2JSon(request,old = {}):
+    data = {}
+    # if 'type' not in request.form:
+        # print("no type in request.form")
+        # return json.dumps(data)
+    if ('type' in old and old['type'] == 'want') or ('type' in request.form and request.form['type'] == 'want'):
+        return Request2JSonWant(request,old)
+    else:
+        print("type %s not supported"%request.form['type'])
+    return json.dumps(data)
+
 def HandleAddSubList(db, cursor, request):
     ID = request.form['id']
     subID = request.form['subID']

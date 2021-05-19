@@ -34,7 +34,7 @@ def DBOperation():
                 print("ERROR:pattern not in request.form")
             else:
                 currentPattern = request.form['pattern']
-                myWebUtil.SetConfig(currentPattern)
+                myWebUtil.SetConfigCurrentPattern(currentPattern)
                 print("set currentPattern %s"%currentPattern)
         elif op == "add subList":
             myWebUtil.HandleAddSubList(db, cursor, request)
