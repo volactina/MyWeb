@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>High Frequency Site</title>
+</head>
+<body>
+    <script src="navigation.js"></script>
+	<div>
+		<h1>添加日志</h1>
+		<form action="/WebDevelopLog.html" method="post">
+              <p><input name="content"></p>
+              <p><button type="add">add</button></p>
+        </form>
+		<hr>
+	</div>
+	<div>
+		{% for str in logs %}
+		<p>{{ str }}</p><hr>
+		{% endfor %}
+	</div>
+	<div>
+		<h1>参考资源</h1>
+		<p><a target="_blank" href="https://baijiahao.baidu.com/s?id=1664008350346589392&wfr=spider&for=pc">前端人员必备的9款web前端开发框架</a></p>
+		<hr>
+	</div>
+
+</body>
+</html>

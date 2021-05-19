@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>需求管理平台</title>
+</head>
+<body>
+    <script src="navigation.js"></script>
+	<div>
+		<h1>新需求</h1>
+		<form action="/wantanddo.html" method="post">
+			  <p><textarea name="content"></textarea></p>
+			  <input type="hidden" name="op" value="add">
+			  <input type="hidden" name="type" value="want">
+              <p><button type="add">add</button></p>
+        </form>
+		<hr>
+	</div>
+	<div>
+		<h1>工作模式</h1>
+		<form action="/wantanddo.html" method="post">
+			<select name="pattern">
+			{% for pattern in config['patternList'] %}
+				{% if pattern == config['currentPattern'] %}
+					<option value="{{pattern}}" selected = "selected">{{pattern}}</option>
+				{% else %}
+					<option value="{{pattern}}">{{pattern}}</option>
+				{% endif %}
+			{% endfor %}
+			</select>
+			<input type="hidden" name="op" value="config">
+			<input type="hidden" name="type" value="config">
+			<button>set</button>
+		</form>
+		<hr>
+	</div>
+	<div>
+		{% for webdata in webdatas %}
+			{% if config['currentPattern'] == 'all' or config['currentPattern'] == webdata['status'] %}
+				{% for tag in webdata %}
+				<p>{{tag}}:{{webdata[tag]}}</p>
+				{% endfor %}
+				<form action="/wantanddo.html" method="post">
+					  <p><textarea name="content"">{{ webdata['content'] }}</textarea></p>
+					  <input type="hidden" name="id" value="{{webdata['id']}}">
+					  <input type="hidden" name="op" value="update">
+					  <p><button type="update">update</button></p>
+				</form>
+				<form action="/wantanddo.html" method="post">
+					  <input type="hidden" name="id" value="{{webdata['id']}}">
+					  <input type="hidden" name="op" value="delete">
+					  <p><button type="delete">delete</button></p>
+				</form>
+				{% for status in fsm['statusList'] %}
+					 {% if fsm['path'][fsm['statusList'].index(webdata['status'])][fsm['statusList'].index(status)] == 1 %}
+						<form action="/wantanddo.html" method="post">
+							  <input type="hidden" name="id" value="{{webdata['id']}}">
+							  <input type="hidden" name="op" value="update">
+							  <input type="hidden" name="status" value="{{status}}">
+							  <button type="update">{{status}}</button>
+						</form>
+					{% endif %}
+				{% endfor %}
+				<form action="/wantanddo.html" method="post">
+				      <input type="number" name="subID">
+					  <input type="hidden" name="id" value="{{webdata['id']}}">
+					  <input type="hidden" name="op" value="add subList">
+					  <p><button type="delete">add subList</button></p>
+				</form>
+				<form action="/wantanddo.html" method="post">
+				      <input type="number" name="subID">
+					  <input type="hidden" name="id" value="{{webdata['id']}}">
+					  <input type="hidden" name="op" value="del subList">
+					  <p><button type="delete">delete subList</button></p>
+				</form>
+				<form action="/wantanddo.html" method="post">
+				      <input type="number" name="parentID">
+					  <input type="hidden" name="id" value="{{webdata['id']}}">
+					  <input type="hidden" name="op" value="add parent">
+					  <p><button type="delete">add parent</button></p>
+				</form>
+				<form action="/wantanddo.html" method="post">
+				      <input type="number" name="parentID">
+					  <input type="hidden" name="id" value="{{webdata['id']}}">
+					  <input type="hidden" name="op" value="del parent">
+					  <p><button type="delete">delete parent</button></p>
+				</form>
+				<hr>
+			{% endif %}
+		{% endfor %}
+	</div>
+	<div>
+		<h1>参考资源</h1>
+		<p><a target="_blank" href="https://baijiahao.baidu.com/s?id=1664008350346589392&wfr=spider&for=pc">前端人员必备的9款web前端开发框架</a></p>
+		<hr>
+	</div>
+
+</body>
+</html>
