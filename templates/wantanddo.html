@@ -28,16 +28,31 @@
 				{% endif %}
 			{% endfor %}
 			</select>
-			<input type="hidden" name="op" value="config">
+			<input type="hidden" name="op" value="config pattern">
 			<input type="hidden" name="type" value="config">
 			<button>set</button>
 		</form>
-		当前工作节点：
+		当前工作目录: {% if config['currentDir'] == -1 %} root {% else %} {{config['currentDir']}} {% endif %}
+		<form action="/wantanddo.html" method="post">
+			<select name="ID">
+			{% for parent in config['parentList'] %}
+				<option value="{{parent}}">{{parent}}</option>
+			{% endfor %}
+			</select>
+			<input type="hidden" name="op" value="config dir">
+			<input type="hidden" name="type" value="config">
+			<button>go to parent</button>
+		</form>
+		<form action="/wantanddo.html" method="post">
+			<input type="hidden" name="ID" value="-1">
+			<input type="hidden" name="op" value="config dir">
+			<input type="hidden" name="type" value="config">
+			<button>go to root</button>
+		</form>
 		<hr>
 	</div>
 	<div>
 		{% for webdata in webdatas %}
-			{% if config['currentPattern'] == 'all' or config['currentPattern'] == webdata['status'] %}
 				{% for tag in webdata %}
 				<p>{{tag}}:{{webdata[tag]}}</p>
 				{% endfor %}
@@ -86,8 +101,13 @@
 					  <input type="hidden" name="op" value="del parent">
 					  <p><button type="delete">delete parent</button></p>
 				</form>
+				<form action="/wantanddo.html" method="post">
+					<input type="hidden" name="ID" value="{{webdata['id']}}">
+					<input type="hidden" name="op" value="config dir">
+					<input type="hidden" name="type" value="config">
+					<button>select as dir</button>
+				</form>
 				<hr>
-			{% endif %}
 		{% endfor %}
 	</div>
 	<div>

@@ -32,7 +32,7 @@ fsm = {'statusList':['todo','cancel','in progress','block','suspend','done'],
                [0,1,1,0,0,0],
                [0,0,0,0,0,0]]}
 
-defaultConfig = {'patternList':['all','todo','cancel','in progress','block','suspend','done'],'currentPattern':'in progress'}
+defaultConfig = {'patternList':['all','todo','cancel','in progress','block','suspend','done'],'currentPattern':'in progress','currentDir':-1}
 
 dbConnected = False
 
@@ -64,10 +64,16 @@ def SetConfig(config):
     with open("config.json","w") as file:
         json.dump(config, file, indent = 2)
 
-def SetConfigCurrentPattern(currentPattern):
+def FilterWebDatas(webdatas):
+    newWebdatas = []
+    #filter out correct status
     config  = GetConfig()
-    config['currentPattern'] = currentPattern
-    SetConfig(config)
+    currentPattern = config['currentPattern']
+    for webdata in webdatas:
+        if currentPattern == "all" or webdata['status'] == currentPattern:
+            newWebdatas.append(webdata)
+    return newWebdatas
+    #todo:filter out subList under certain ID
 
 '''
 Common Utils
@@ -93,6 +99,16 @@ def BuildHistory(old, new):
             newhistory[tag] = new[tag]
     histories.append(newhistory)
     return histories
+
+def GetTagByID(cursor, ID, tag):
+    result = SelectOneWebDataById(cursor, ID)
+    content = result['content']
+    data = JSon2WebData(content)
+    if tag in data:
+        return data[tag]
+    else:
+        print("ERROR:%s not exist" % tag)
+        return None
 
 '''
 DB Operation
@@ -128,9 +144,17 @@ def SelectAllWebData(cursor):
     return results
 
 def SelectOneWebDataById(cursor,ID):
-    sql = "select content from webdata where id = %s"
+    sql = "select * from webdata where id = %s"
     cursor.execute(sql, ID)
     return cursor.fetchone()
+
+def DBSelectSomeWebDatasById(cursor, IDs):
+    if IDs == None:
+        return []
+    webdatas = []
+    for ID in IDs:
+        webdatas.append(SelectOneWebDataById(cursor, ID))
+    return webdatas
 
 def DBUpdateOneWebData(db,cursor,content,ID):
     sql = "update webdata set content = %s where id = %s"
@@ -242,3 +266,24 @@ def HandleDelParentList(db, cursor, request):
     parentID = request.form['parentID']
     DelParentList(db, cursor, ID, parentID)
     DelSubList(db, cursor, parentID, ID)
+
+def HandleConfigPattern(request):
+    if 'pattern' not in request.form:
+        print("ERROR:pattern not in request.form")
+        return
+    currentPattern = request.form['pattern']
+    config  = GetConfig()
+    config['currentPattern'] = currentPattern
+    SetConfig(config)
+    print("set currentPattern %s" % currentPattern)
+
+def HandleConfigDir(request):
+    if 'ID' not in request.form:
+        print("ERROR:ID not in request.form")
+        return
+    currentID = int(request.form['ID'])
+    config  = GetConfig()
+    config['currentDir'] = currentID
+    SetConfig(config)
+    print("set currentID %s" % currentID)
+    

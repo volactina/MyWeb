@@ -29,13 +29,10 @@ def DBOperation():
             old = myWebUtil.SelectOneWebDataById(cursor,webdataid)
             new = myWebUtil.Request2JSon(request,myWebUtil.JSon2WebData(old['content']))
             myWebUtil.DBUpdateOneWebData(db,cursor,new,webdataid)
-        elif op == "config":
-            if 'pattern' not in request.form:
-                print("ERROR:pattern not in request.form")
-            else:
-                currentPattern = request.form['pattern']
-                myWebUtil.SetConfigCurrentPattern(currentPattern)
-                print("set currentPattern %s"%currentPattern)
+        elif op == "config pattern":
+            myWebUtil.HandleConfigPattern(request)
+        elif op == "config dir":
+            myWebUtil.HandleConfigDir(request)
         elif op == "add subList":
             myWebUtil.HandleAddSubList(db, cursor, request)
         elif op == "add parent":
@@ -46,7 +43,15 @@ def DBOperation():
             myWebUtil.HandleDelParentList(db, cursor, request)
         else:
             print("%s not supported" % op)
-    results = myWebUtil.SelectAllWebData(cursor)
+    config = myWebUtil.GetConfig()
+    config['parentList'] = []
+    curID = config['currentDir']
+    if curID == -1:
+        results = myWebUtil.SelectAllWebData(cursor)
+    else:
+        results = myWebUtil.DBSelectSomeWebDatasById(cursor, myWebUtil.GetTagByID(cursor, curID, 'subList'))
+        config['parentList'] = myWebUtil.GetTagByID(cursor, curID, 'parentList')
+        config['parentList'] = [] if config['parentList'] == None else config['parentList']
     myWebUtil.CloseDB(db)
     webdatas = []
     for row in results:
@@ -54,8 +59,9 @@ def DBOperation():
         webdata = myWebUtil.JSon2WebData(row['content'])
         webdata['id'] = row['id']
         webdatas.append(webdata)
+    webdatas = myWebUtil.FilterWebDatas(webdatas)
     webdatas = sorted(webdatas,key=lambda x:x['updateDate'],reverse=True)
-    return render_template("wantanddo.html", webdatas = webdatas, fsm = myWebUtil.GetFSM(), config = myWebUtil.GetConfig())
+    return render_template("wantanddo.html", webdatas = webdatas, fsm = myWebUtil.GetFSM(), config = config)
 
 @app.route('/WebDevelopLog.html', methods=['GET'])
 def WebDevelopLogGet():
