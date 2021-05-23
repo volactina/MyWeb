@@ -22,7 +22,8 @@ reference[]
 
 '''
 
-jsonTags = ['content', 'type', 'status', 'originalDate', 'updateDate']
+jsonTags = ['content', 'type', 'status', 'originalDate', 'updateDate', 'priority']
+defaultJsonTagsValue = {'status':'todo', 'priority':'3 Low'}
 
 fsm = {'statusList':['todo','cancel','in progress','block','suspend','done'],
        'path':[[0,1,1,1,1,0],
@@ -221,7 +222,10 @@ def HandleNewWant(db, cursor, request):
     for tag in jsonTags:
         if tag in request.form:
             new[tag] = request.form[tag]
-    new['status'] = 'todo'
+    for tag in defaultJsonTagsValue:
+        if tag not in new:
+            new[tag] = defaultJsonTagsValue[tag]
+    # new['status'] = 'todo'
     new['originalDate'] = time.localtime()
     new['updateDate'] = time.localtime()
     new['history'] = BuildHistory(old, new)

@@ -57,7 +57,10 @@ def DBOperation():
         webdata['id'] = row['id']
         webdatas.append(webdata)
     webdatas = myWebUtil.FilterWebDatas(webdatas)
-    webdatas = sorted(webdatas,key=lambda x:x['updateDate'],reverse=True)
+    for webdata in webdatas:
+        if 'priority' not in webdata:
+            webdata['priority'] = '3 Low'
+    webdatas = sorted(webdatas,key=lambda x:(-int(x['priority'][0]),x['updateDate']),reverse=True)
     return render_template("wantanddo.html", webdatas = webdatas, fsm = myWebUtil.GetFSM(), config = config)
 
 @app.route('/WebDevelopLog.html', methods=['GET'])
