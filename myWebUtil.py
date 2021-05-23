@@ -133,7 +133,7 @@ def DeleteWebDataById(db,cursor,ID):
     db.commit()
     print("delete id=%s"%ID)
 
-def InsertNewWebData(db,cursor,content):
+def DBInsertNewWebData(db,cursor,content):
     sql = "insert into webdata(content) values (%s)"
     cursor.execute(sql,content)
     db.commit()
@@ -215,33 +215,30 @@ def DelParentList(db, cursor, ID, parentID):
 '''
 Handle Op
 '''
-def Request2JSonWant(request,old):
+def HandleNewWant(db, cursor, request):
     new = {}
-    print(request.form)
+    old = {}
     for tag in jsonTags:
         if tag in request.form:
             new[tag] = request.form[tag]
-    if request.form['op'] == 'add':
-        new['status'] = 'todo'
-        new['originalDate'] = time.localtime()
-    elif request.form['op'] == 'update':
-        for tag in old:
-            if tag not in new:
-                new[tag] = old[tag]
+    new['status'] = 'todo'
+    new['originalDate'] = time.localtime()
     new['updateDate'] = time.localtime()
     new['history'] = BuildHistory(old, new)
-    return json.dumps(new)
+    content = WebData2JSon(new)
+    DBInsertNewWebData(db, cursor, content)
 
-def Request2JSon(request,old = {}):
-    data = {}
-    # if 'type' not in request.form:
-        # print("no type in request.form")
-        # return json.dumps(data)
-    if ('type' in old and old['type'] == 'want') or ('type' in request.form and request.form['type'] == 'want'):
-        return Request2JSonWant(request,old)
-    else:
-        print("type %s not supported"%request.form['type'])
-    return json.dumps(data)
+def HandleGenralUpdate(db, cursor, request):
+    ID = request.form['id']
+    old = JSon2WebData(SelectOneWebDataById(cursor,ID)['content'])
+    new = {}
+    for tag in jsonTags:
+        if tag in request.form:
+            new[tag] = request.form[tag]
+    for tag in old:
+        if tag not in new:
+            new[tag] = old[tag]
+    UpdateOneWebDataCommon(db, cursor, ID, old, new)
 
 def HandleAddSubList(db, cursor, request):
     ID = request.form['id']

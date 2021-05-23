@@ -20,15 +20,12 @@ def DBOperation():
         op = request.form['op']
         print("op=%s" % op)
         if op == "add":
-            myWebUtil.InsertNewWebData(db,cursor,myWebUtil.Request2JSon(request))
+            myWebUtil.HandleNewWant(db, cursor, request)
         elif op == "delete":
             webdataid = request.form['id']
             myWebUtil.DeleteWebDataById(db,cursor,webdataid)
         elif op == "update":
-            webdataid = request.form['id']
-            old = myWebUtil.SelectOneWebDataById(cursor,webdataid)
-            new = myWebUtil.Request2JSon(request,myWebUtil.JSon2WebData(old['content']))
-            myWebUtil.DBUpdateOneWebData(db,cursor,new,webdataid)
+            myWebUtil.HandleGenralUpdate(db, cursor, request)
         elif op == "config pattern":
             myWebUtil.HandleConfigPattern(request)
         elif op == "config dir":
