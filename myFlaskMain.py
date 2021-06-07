@@ -45,10 +45,12 @@ def DBOperation():
     curID = config['currentDir']
     if curID == -1:
         results = myWebUtil.SelectAllWebData(cursor)
+        config['curContent'] = 'root'
     else:
         results = myWebUtil.DBSelectSomeWebDatasById(cursor, myWebUtil.GetTagByID(cursor, curID, 'subList'))
         config['parentList'] = myWebUtil.GetTagByID(cursor, curID, 'parentList')
         config['parentList'] = [] if config['parentList'] == None else config['parentList']
+        config['curContent'] = myWebUtil.GetTagByID(cursor, curID, 'content')
     myWebUtil.CloseDB(db)
     webdatas = []
     for row in results:

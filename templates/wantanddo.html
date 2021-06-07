@@ -50,6 +50,7 @@
 			<button>set</button>
 		</form>
 		当前工作目录: {% if config['currentDir'] == -1 %} root {% else %} {{config['currentDir']}} {% endif %}
+		content:{{ config['curContent'] }}
 		<form action="/wantanddo.html" method="post">
 			<select name="ID">
 			{% for parent in config['parentList'] %}
