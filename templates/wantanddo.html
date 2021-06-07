@@ -23,12 +23,12 @@
 			  <option type="number" value="2 Median" selected="selected">Median</option>
 			  <option type="number" value="3 Low">Low</option>
 			  </select>
-			  <!-- parent= -->
-			  <!-- {% if config['currentDir'] == -1 %} -->
-			  <!-- <input type="number" name="parent"> -->
-			  <!-- {% else %} -->
-			  <!-- <input type="number" name="parent" value="{{config['currentDir']}}"> -->
-			  <!-- {% endif %} -->
+			  parent=
+			  {% if config['currentDir'] == -1 %}
+			  <input type="number" name="parentID">
+			  {% else %}
+			  <input type="number" name="parentID" value="{{config['currentDir']}}">
+			  {% endif %}
               <p><button type="add">add</button></p>
         </form>
 		<hr>

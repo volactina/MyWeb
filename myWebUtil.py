@@ -168,6 +168,12 @@ def UpdateOneWebDataCommon(db, cursor, ID, old, new):
     content = WebData2JSon(new)
     DBUpdateOneWebData(db, cursor, content, ID)
 
+def DBGetMaxID(db, cursor):
+    cursor.execute("select max(id) as id from webdata")
+    result = cursor.fetchone()
+    maxID = result['id']
+    return maxID
+    
 '''
 blockList[] subList[] parentList[]
 '''
@@ -225,12 +231,16 @@ def HandleNewWant(db, cursor, request):
     for tag in defaultJsonTagsValue:
         if tag not in new:
             new[tag] = defaultJsonTagsValue[tag]
-    # new['status'] = 'todo'
     new['originalDate'] = time.localtime()
     new['updateDate'] = time.localtime()
     new['history'] = BuildHistory(old, new)
     content = WebData2JSon(new)
     DBInsertNewWebData(db, cursor, content)
+    if 'parentID' in request.form and not request.form['parentID'] is None:
+        newID = DBGetMaxID(db, cursor)
+        parentID = int(request.form['parentID'])
+        AddParentList(db, cursor, newID, parentID)
+        AddSubList(db, cursor, parentID, newID)
 
 def HandleGenralUpdate(db, cursor, request):
     ID = request.form['id']
