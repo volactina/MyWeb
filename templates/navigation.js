@@ -12,6 +12,7 @@ document.writeln("		<a href=\'highFrequencySite.html\'>经常访问站点</a>");
 document.writeln("		<a href=\'Blog.html\'>博客（密室逃脱）</a>");
 document.writeln("		<a href=\'WebDevelopLog.html\'>更新日志</a>");
 document.writeln("		<a href=\'wantanddo.html\'>需求管理</a>");
+document.writeln("		<a href=\'timeBank.html\'>时间银行</a>");
 document.writeln("		<hr>");
 document.writeln("	</div>");
 document.writeln("");
