@@ -1,0 +1,42 @@
+From bdce50f5c3f02c86f1145278b26b2b4368b73e11 Mon Sep 17 00:00:00 2001
+From: yewenhao <10165101137@stu.ecnu.edu.cn>
+Date: Mon, 7 Jun 2021 21:59:22 +0800
+Subject: [PATCH 7/9] #74:show content of current working dir
+
+---
+ myFlaskMain.py           | 2 ++
+ templates/wantanddo.html | 1 +
+ 2 files changed, 3 insertions(+)
+
+diff --git a/myFlaskMain.py b/myFlaskMain.py
+index a149bcb..34d8311 100644
+--- a/myFlaskMain.py
++++ b/myFlaskMain.py
+@@ -45,10 +45,12 @@ def DBOperation():
+     curID = config['currentDir']
+     if curID == -1:
+         results = myWebUtil.SelectAllWebData(cursor)
++        config['curContent'] = 'root'
+     else:
+         results = myWebUtil.DBSelectSomeWebDatasById(cursor, myWebUtil.GetTagByID(cursor, curID, 'subList'))
+         config['parentList'] = myWebUtil.GetTagByID(cursor, curID, 'parentList')
+         config['parentList'] = [] if config['parentList'] == None else config['parentList']
++        config['curContent'] = myWebUtil.GetTagByID(cursor, curID, 'content')
+     myWebUtil.CloseDB(db)
+     webdatas = []
+     for row in results:
+diff --git a/templates/wantanddo.html b/templates/wantanddo.html
+index b3f8807..f8ba97a 100644
+--- a/templates/wantanddo.html
++++ b/templates/wantanddo.html
+@@ -50,6 +50,7 @@
+ 			<button>set</button>
+ 		</form>
+ 		当前工作目录: {% if config['currentDir'] == -1 %} root {% else %} {{config['currentDir']}} {% endif %}
++		content:{{ config['curContent'] }}
+ 		<form action="/wantanddo.html" method="post">
+ 			<select name="ID">
+ 			{% for parent in config['parentList'] %}
+-- 
+2.39.2 (Apple Git-143)
+

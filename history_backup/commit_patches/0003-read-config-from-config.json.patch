@@ -1,0 +1,188 @@
+From c79438e4f003017da960b9d59e166d62614b278d Mon Sep 17 00:00:00 2001
+From: yewenhao <10165101137@stu.ecnu.edu.cn>
+Date: Wed, 19 May 2021 16:21:37 +0800
+Subject: [PATCH 3/9] read config from config.json
+
+---
+ .gitignore               |  3 +-
+ myFlaskMain.py           |  2 +-
+ myWebUtil.py             | 97 +++++++++++++++++++++++++---------------
+ templates/wantanddo.html |  1 +
+ 4 files changed, 65 insertions(+), 38 deletions(-)
+
+diff --git a/.gitignore b/.gitignore
+index 2bfa3e2..4fd628a 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,4 +1,5 @@
+ __pycache__/
+ .vs/
+ doc/
+-*.jpg
+\ No newline at end of file
++*.jpg
++config.json
+\ No newline at end of file
+diff --git a/myFlaskMain.py b/myFlaskMain.py
+index aa13e9d..3613acd 100644
+--- a/myFlaskMain.py
++++ b/myFlaskMain.py
+@@ -34,7 +34,7 @@ def DBOperation():
+                 print("ERROR:pattern not in request.form")
+             else:
+                 currentPattern = request.form['pattern']
+-                myWebUtil.SetConfig(currentPattern)
++                myWebUtil.SetConfigCurrentPattern(currentPattern)
+                 print("set currentPattern %s"%currentPattern)
+         elif op == "add subList":
+             myWebUtil.HandleAddSubList(db, cursor, request)
+diff --git a/myWebUtil.py b/myWebUtil.py
+index e4e6d53..a759f1e 100644
+--- a/myWebUtil.py
++++ b/myWebUtil.py
+@@ -26,13 +26,13 @@ jsonTags = ['content', 'type', 'status', 'originalDate', 'updateDate']
+ 
+ fsm = {'statusList':['todo','cancel','in progress','block','suspend','done'],
+        'path':[[0,1,1,1,1,0],
+-           [0,0,0,0,0,0],
+-           [0,1,0,0,1,1],
+-           [0,1,0,0,1,0],
+-           [0,1,1,0,0,0],
+-           [0,0,0,0,0,0]]}
++               [0,0,0,0,0,0],
++               [0,1,0,0,1,1],
++               [0,1,0,0,1,0],
++               [0,1,1,0,0,0],
++               [0,0,0,0,0,0]]}
+ 
+-config = {'patternList':['all','todo','cancel','in progress','block','suspend','done'],'currentPattern':'in progress'}
++defaultConfig = {'patternList':['all','todo','cancel','in progress','block','suspend','done'],'currentPattern':'in progress'}
+ 
+ dbConnected = False
+ 
+@@ -40,12 +40,38 @@ dbConnected = False
+ def GetFSM():
+     return fsm
+ 
++'''
++config
++'''
++
+ def GetConfig():
++    LocalConfigNeedUpdate = False
++    try:
++        with open("config.json") as file:
++            config = json.load(file)
++        for tag in defaultConfig:
++            if tag not in config:
++                config[tag] = defaultConfig[tag]
++                LocalConfigNeedUpdate = True
++    except FileNotFoundError:
++        config = defaultConfig
++        LocalConfigNeedUpdate = True
++    if LocalConfigNeedUpdate:
++        SetConfig(config)
+     return config
+ 
+-def SetConfig(currentPattern):
++def SetConfig(config):
++    with open("config.json","w") as file:
++        json.dump(config, file, indent = 2)
++
++def SetConfigCurrentPattern(currentPattern):
++    config  = GetConfig()
+     config['currentPattern'] = currentPattern
++    SetConfig(config)
+ 
++'''
++Common Utils
++'''
+ def JSon2WebData(jsonText):
+     data = json.loads(jsonText)
+     return data
+@@ -67,35 +93,6 @@ def BuildHistory(old, new):
+             newhistory[tag] = new[tag]
+     histories.append(newhistory)
+     return histories
+-            
+-
+-def Request2JSonWant(request,old):
+-    new = {}
+-    print(request.form)
+-    for tag in jsonTags:
+-        if tag in request.form:
+-            new[tag] = request.form[tag]
+-    if request.form['op'] == 'add':
+-        new['status'] = 'todo'
+-        new['originalDate'] = time.localtime()
+-    elif request.form['op'] == 'update':
+-        for tag in old:
+-            if tag not in new:
+-                new[tag] = old[tag]
+-    new['updateDate'] = time.localtime()
+-    new['history'] = BuildHistory(old, new)
+-    return json.dumps(new)
+-
+-def Request2JSon(request,old = {}):
+-    data = {}
+-    # if 'type' not in request.form:
+-        # print("no type in request.form")
+-        # return json.dumps(data)
+-    if ('type' in old and old['type'] == 'want') or ('type' in request.form and request.form['type'] == 'want'):
+-        return Request2JSonWant(request,old)
+-    else:
+-        print("type %s not supported"%request.form['type'])
+-    return json.dumps(data)
+ 
+ '''
+ DB Operation
+@@ -194,6 +191,34 @@ def DelParentList(db, cursor, ID, parentID):
+ '''
+ Handle Op
+ '''
++def Request2JSonWant(request,old):
++    new = {}
++    print(request.form)
++    for tag in jsonTags:
++        if tag in request.form:
++            new[tag] = request.form[tag]
++    if request.form['op'] == 'add':
++        new['status'] = 'todo'
++        new['originalDate'] = time.localtime()
++    elif request.form['op'] == 'update':
++        for tag in old:
++            if tag not in new:
++                new[tag] = old[tag]
++    new['updateDate'] = time.localtime()
++    new['history'] = BuildHistory(old, new)
++    return json.dumps(new)
++
++def Request2JSon(request,old = {}):
++    data = {}
++    # if 'type' not in request.form:
++        # print("no type in request.form")
++        # return json.dumps(data)
++    if ('type' in old and old['type'] == 'want') or ('type' in request.form and request.form['type'] == 'want'):
++        return Request2JSonWant(request,old)
++    else:
++        print("type %s not supported"%request.form['type'])
++    return json.dumps(data)
++
+ def HandleAddSubList(db, cursor, request):
+     ID = request.form['id']
+     subID = request.form['subID']
+diff --git a/templates/wantanddo.html b/templates/wantanddo.html
+index c702480..2f02cce 100644
+--- a/templates/wantanddo.html
++++ b/templates/wantanddo.html
+@@ -32,6 +32,7 @@
+ 			<input type="hidden" name="type" value="config">
+ 			<button>set</button>
+ 		</form>
++		当前工作节点：
+ 		<hr>
+ 	</div>
+ 	<div>
+-- 
+2.39.2 (Apple Git-143)
+
