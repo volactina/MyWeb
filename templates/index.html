@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>项目管理平台</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: rgba(255, 255, 255, 0.08);
+      --panel-2: rgba(255, 255, 255, 0.06);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: rgba(255, 255, 255, 0.92);
+      --muted: rgba(255, 255, 255, 0.68);
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      --primary: #5b8cff;
+      --primary-2: #2f77ff;
+      --danger: #ff4d4f;
+      --focus: rgba(91, 140, 255, 0.35);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background:
+        radial-gradient(900px 500px at 10% 0%, rgba(91, 140, 255, 0.22), transparent 60%),
+        radial-gradient(800px 500px at 90% 10%, rgba(255, 77, 79, 0.18), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 18px 60px;
+    }
+
+    header.hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    header.hero h1 {
+      margin: 0;
+      letter-spacing: -0.02em;
+      font-size: 26px;
+    }
+
+    header.hero .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .full {
+      grid-column: 1 / -1;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 10px 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 14px;
+      background: rgba(0, 0, 0, 0.18);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+    input:focus, textarea:focus {
+      border-color: rgba(91, 140, 255, 0.8);
+      box-shadow: 0 0 0 4px var(--focus);
+      background: rgba(0, 0, 0, 0.22);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 90px;
+    }
+
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 12px;
+      font-size: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+      transition: transform 0.05s ease, background 0.15s ease, border-color 0.15s ease;
+      user-select: none;
+    }
+    button:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+    button:active {
+      transform: translateY(1px);
+    }
+    button.primary {
+      background: linear-gradient(180deg, var(--primary), var(--primary-2));
+      color: #081024;
+      border-color: rgba(91, 140, 255, 0.55);
+      font-weight: 650;
+    }
+
+    button.danger {
+      background: rgba(255, 77, 79, 0.14);
+      border-color: rgba(255, 77, 79, 0.35);
+      color: rgba(255, 255, 255, 0.92);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      overflow: hidden;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    th, td {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 10px 10px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+    th {
+      background: rgba(255, 255, 255, 0.07);
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    tbody tr:nth-child(even) td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    tbody tr:hover td {
+      background: rgba(91, 140, 255, 0.08);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .actions button {
+      width: auto;
+      padding: 6px 10px;
+    }
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 10px;
+    }
+
+    .hint-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+    }
+
+    .kbd {
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.78);
+      background: rgba(0, 0, 0, 0.18);
+    }
+
+    @media (max-width: 760px) {
+      .grid { grid-template-columns: 1fr; }
+      header.hero { align-items: flex-start; flex-direction: column; }
+      th:nth-child(3), td:nth-child(3) { display: none; } /* hide detail column on small screens */
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="hero">
+      <div>
+        <h1>项目管理平台</h1>
+        <p class="sub">Flask + CSV • CRUD + Filter</p>
+      </div>
+      <div class="kbd">Tip: use “Search” after typing filters</div>
+    </header>
+
+    <section class="card">
+    <h2 id="form-title">Add New Item</h2>
+    <form id="item-form" class="grid">
+      <input type="hidden" id="item-id" />
+      <div>
+        <label for="title">Name/Title</label>
+        <input id="title" name="title" placeholder="e.g. Weekly Plan" required />
+      </div>
+      <div>
+        <label for="detail">Detail Content</label>
+        <textarea id="detail" name="detail" rows="3" placeholder="Write details here..."></textarea>
+      </div>
+      <div class="actions full">
+        <button class="primary" type="submit" id="submit-btn">Create</button>
+        <button type="button" id="cancel-btn">Cancel Edit</button>
+      </div>
+    </form>
+    <div id="form-message" class="muted"></div>
+  </section>
+
+  <section class="card">
+    <h2>Filter</h2>
+    <div class="grid">
+      <div>
+        <label for="filter-title">Filter by Name/Title</label>
+        <input id="filter-title" placeholder="contains..." />
+      </div>
+      <div>
+        <label for="filter-detail">Filter by Detail Content</label>
+        <input id="filter-detail" placeholder="contains..." />
+      </div>
+      <div class="actions full">
+        <button type="button" id="search-btn">Search</button>
+        <button type="button" id="clear-btn">Clear</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Items</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name/Title</th>
+          <th>Detail</th>
+          <th>Created Date</th>
+          <th>Updated Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="items-body"></tbody>
+    </table>
+  </section>
+
+  <script src="/static/app.js"></script>
+  </div>
+</body>
+</html>
