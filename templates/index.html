@@ -91,7 +91,7 @@
       margin-bottom: 6px;
     }
 
-    input, textarea {
+    input, textarea, select {
       width: 100%;
       padding: 10px 10px;
       border: 1px solid var(--border);
@@ -102,7 +102,7 @@
       outline: none;
       transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
     }
-    input:focus, textarea:focus {
+    input:focus, textarea:focus, select:focus {
       border-color: rgba(91, 140, 255, 0.8);
       box-shadow: 0 0 0 4px var(--focus);
       background: rgba(0, 0, 0, 0.22);
@@ -212,6 +212,54 @@
       header.hero { align-items: flex-start; flex-direction: column; }
       th:nth-child(3), td:nth-child(3) { display: none; } /* hide detail column on small screens */
     }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 50;
+    }
+    .modal {
+      width: min(900px, 100%);
+      max-height: min(80vh, 900px);
+      overflow: auto;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: var(--radius);
+      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.6);
+      padding: 14px;
+    }
+    .modal-header {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .modal-title {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+    .modal-body table {
+      margin-top: 8px;
+    }
+    .modal-body td.k {
+      width: 160px;
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 12px;
+    }
+    .modal-body pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12.5px;
+    }
   </style>
 </head>
 <body>
@@ -236,6 +284,42 @@
         <label for="detail">Detail Content</label>
         <textarea id="detail" name="detail" rows="3" placeholder="Write details here..."></textarea>
       </div>
+      <div>
+        <label for="urgency-level">时间紧急程度</label>
+        <select id="urgency-level" name="urgency_level">
+          <option value="0">0 - 没有明确deadline（缺省值）</option>
+          <option value="1">1 - 最近几日</option>
+          <option value="2">2 - 本周内</option>
+          <option value="3">3 - 本月</option>
+          <option value="4">4 - 具体日期（选择日期记录）</option>
+        </select>
+      </div>
+      <div>
+        <label for="project-status">项目状态</label>
+        <select id="project-status" name="project_status">
+          <option value="0">0 - 待开始</option>
+          <option value="1">1 - 进行中</option>
+          <option value="2">2 - 已完成</option>
+          <option value="4">4 - 阻塞（等待前置完成）</option>
+          <option value="5">5 - 中止</option>
+        </select>
+      </div>
+      <div class="full">
+        <label for="parent-ids">上级项目列表（id 用 ; 分隔）</label>
+        <input id="parent-ids" name="parent_ids" placeholder="例如：1;2;8" />
+      </div>
+      <div class="full">
+        <label for="child-ids">下级项目列表（id 用 ; 分隔）</label>
+        <input id="child-ids" name="child_ids" placeholder="例如：10;11" />
+      </div>
+      <div class="full">
+        <label for="prerequisite-ids">前置项目列表（id 用 ; 分隔）</label>
+        <input id="prerequisite-ids" name="prerequisite_ids" placeholder="例如：101;102" />
+      </div>
+      <div class="full" id="deadline-value-wrap">
+        <label for="deadline-value">具体日期（当紧急程度=4时填写）</label>
+        <input id="deadline-value" name="deadline_value" type="date" />
+      </div>
       <div class="actions full">
         <button class="primary" type="submit" id="submit-btn">Create</button>
         <button type="button" id="cancel-btn">Cancel Edit</button>
@@ -247,6 +331,20 @@
   <section class="card">
     <h2>Filter</h2>
     <div class="grid">
+      <div class="full">
+        <label for="filter-root-id">按上级目录过滤（填写项目ID，只显示该项目及其所有子项目）</label>
+        <input id="filter-root-id" inputmode="numeric" placeholder="例如：4" />
+      </div>
+      <div class="full">
+        <label>按项目状态过滤（可多选）</label>
+        <div class="actions">
+          <label><input type="checkbox" class="status-filter" value="0" checked /> 待开始</label>
+          <label><input type="checkbox" class="status-filter" value="1" checked /> 进行中</label>
+          <label><input type="checkbox" class="status-filter" value="2" /> 已完成</label>
+          <label><input type="checkbox" class="status-filter" value="4" /> 阻塞</label>
+          <label><input type="checkbox" class="status-filter" value="5" /> 中止</label>
+        </div>
+      </div>
       <div>
         <label for="filter-title">Filter by Name/Title</label>
         <input id="filter-title" placeholder="contains..." />
@@ -266,20 +364,27 @@
     <h2>Items</h2>
     <table>
       <thead>
-        <tr>
-          <th>ID</th>
-          <th>Name/Title</th>
-          <th>Detail</th>
-          <th>Created Date</th>
-          <th>Updated Date</th>
-          <th>Actions</th>
-        </tr>
+        <tr id="items-head-row"></tr>
       </thead>
       <tbody id="items-body"></tbody>
     </table>
   </section>
 
-  <script src="/static/app.js"></script>
   </div>
+
+  <div id="detail-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="detail-modal-title">详情</h3>
+          <div class="muted" id="detail-modal-sub"></div>
+        </div>
+        <button type="button" id="detail-modal-close">关闭</button>
+      </div>
+      <div class="modal-body" id="detail-modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
 </body>
 </html>
