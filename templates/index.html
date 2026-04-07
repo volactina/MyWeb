@@ -260,6 +260,50 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 12.5px;
     }
+
+    .crumbs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .crumb {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .crumb:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .folder-list {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .folder-list td, .folder-list th {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 10px 10px;
+      font-size: 13px;
+    }
+    .folder-list th {
+      background: rgba(255, 255, 255, 0.07);
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
   </style>
 </head>
 <body>
@@ -305,8 +349,12 @@
         </select>
       </div>
       <div class="full">
-        <label for="parent-ids">上级项目列表（id 用 ; 分隔）</label>
-        <input id="parent-ids" name="parent_ids" placeholder="例如：1;2;8" />
+        <label for="parent-path">上级项目路径</label>
+        <div class="actions">
+          <input id="parent-path" name="parent_path" readonly placeholder="根目录 /" />
+          <button type="button" id="parent-path-btn">选择路径</button>
+        </div>
+        <input id="parent-ids" name="parent_ids" type="hidden" />
       </div>
       <div class="full">
         <label for="child-ids">下级项目列表（id 用 ; 分隔）</label>
@@ -333,7 +381,10 @@
     <div class="grid">
       <div class="full">
         <label for="filter-root-id">按上级目录过滤（填写项目ID，只显示该项目及其所有子项目）</label>
-        <input id="filter-root-id" inputmode="numeric" placeholder="例如：4" />
+        <div class="actions">
+          <input id="filter-root-id" inputmode="numeric" placeholder="例如：4" />
+          <button type="button" id="filter-up-btn">返回上级</button>
+        </div>
       </div>
       <div class="full">
         <label>按项目状态过滤（可多选）</label>
@@ -382,6 +433,53 @@
         <button type="button" id="detail-modal-close">关闭</button>
       </div>
       <div class="modal-body" id="detail-modal-body"></div>
+    </div>
+  </div>
+
+  <div id="move-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="move-modal-title">移动项目</h3>
+          <div class="muted" id="move-modal-sub"></div>
+          <div class="crumbs" id="move-modal-crumbs"></div>
+        </div>
+        <button type="button" id="move-modal-close">关闭</button>
+      </div>
+      <div class="actions">
+        <button type="button" class="primary" id="move-modal-move-here">移动到此处</button>
+        <button type="button" id="move-modal-move-root">移动到根目录</button>
+      </div>
+      <table class="folder-list">
+        <thead>
+          <tr>
+            <th>子项目</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="move-modal-list"></tbody>
+      </table>
+      <div class="muted" style="margin-top:10px;" id="move-modal-hint"></div>
+    </div>
+  </div>
+
+  <div id="prereq-choice-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal" style="width: min(520px, 100%);">
+      <div class="modal-header">
+        <div>
+          <h3 class="modal-title" id="prereq-choice-title">添加前置项目</h3>
+          <div class="muted" id="prereq-choice-sub">请选择添加方式</div>
+        </div>
+        <button type="button" id="prereq-choice-close">关闭</button>
+      </div>
+      <div class="actions">
+        <button type="button" class="primary" id="prereq-choice-create-new">新建前置项目</button>
+        <button type="button" id="prereq-choice-link-existing">关联已有项目</button>
+        <button type="button" class="danger" id="prereq-choice-cancel">取消</button>
+      </div>
+      <div class="muted" style="margin-top:10px;" id="prereq-choice-hint">
+        新建：先创建一个新项目，再自动把它设置为当前项目的前置项目。关联：从已有项目中选择一个作为前置项目。
+      </div>
     </div>
   </div>
 

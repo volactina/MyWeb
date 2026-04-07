@@ -312,6 +312,8 @@ def enrich_and_normalize_items(items: List[Dict[str, str]]) -> List[Dict[str, st
         this_id = int(item["id"])
         parent_list = sorted(reverse_edges.get(this_id, set()))
         child_list = sorted(edges.get(this_id, set()))
+        if len(parent_list) > 1:
+            raise ValueError(f"each project can only have one parent (id={this_id})")
         item["parent_ids"] = ";".join(str(i) for i in parent_list)
         item["child_ids"] = ";".join(str(i) for i in child_list)
 
@@ -388,10 +390,16 @@ def list_items():
     title_query = request.args.get("title", "").strip().lower()
     detail_query = request.args.get("detail", "").strip().lower()
     root_id_raw = request.args.get("root_id", "").strip()
+    parent_id_raw = request.args.get("parent_id", "").strip()
     statuses_raw = request.args.get("statuses", "").strip()
+    all_raw = request.args.get("all", "").strip()
     items = read_items()
 
-    if root_id_raw:
+    if parent_id_raw:
+        if not parent_id_raw.isdigit():
+            return jsonify({"error": "invalid parent_id"}), 400
+        items = [i for i in items if str(i.get("parent_ids", "")).strip() == parent_id_raw]
+    elif root_id_raw:
         if not root_id_raw.isdigit():
             return jsonify({"error": "invalid root_id"}), 400
         try:
@@ -399,6 +407,10 @@ def list_items():
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
         items = [i for i in items if int(i["id"]) in allowed]
+    else:
+        if all_raw not in {"1", "true", "True"}:
+            # Default: show root projects (no parent) like a "root folder"
+            items = [i for i in items if not str(i.get("parent_ids", "")).strip()]
 
     if title_query:
         items = [i for i in items if title_query in i["title"].lower()]
@@ -533,6 +545,83 @@ def update_item_status(item_id: int):
     return jsonify(target)
 
 
+@app.patch("/api/items/<int:item_id>/parent")
+def update_item_parent(item_id: int):
+    payload = request.get_json(silent=True) or {}
+    parent_id_raw = payload.get("parent_id", "")
+    parent_id_raw = "" if parent_id_raw is None else str(parent_id_raw).strip()
+
+    if parent_id_raw and not parent_id_raw.isdigit():
+        return jsonify({"error": "invalid parent_id"}), 400
+
+    items = read_items()
+    by_id: Dict[int, Dict[str, str]] = {int(i["id"]): i for i in items}
+    target = by_id.get(item_id)
+    if target is None:
+        return jsonify({"error": "item not found"}), 404
+
+    if parent_id_raw:
+        parent_id = int(parent_id_raw)
+        if parent_id not in by_id:
+            return jsonify({"error": "parent_id does not exist"}), 400
+        if parent_id == item_id:
+            return jsonify({"error": "cannot move under itself"}), 400
+        try:
+            descendants = subtree_ids(item_id, items)
+        except ValueError:
+            descendants = {item_id}
+        if parent_id in descendants:
+            return jsonify({"error": "cannot move under its own subtree"}), 400
+        target["parent_ids"] = str(parent_id)
+    else:
+        target["parent_ids"] = ""
+
+    target["updated_at"] = current_timestamp()
+    try:
+        write_items(list(by_id.values()))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    return jsonify(target)
+
+
+@app.patch("/api/items/<int:item_id>/prerequisites")
+def update_item_prerequisites(item_id: int):
+    """
+    Append an existing project id into prerequisite_ids.
+    Payload:
+      - {"add": "<id>"}  (required)
+    """
+    payload = request.get_json(silent=True) or {}
+    add_raw = payload.get("add", "")
+    add_raw = "" if add_raw is None else str(add_raw).strip()
+    if not add_raw or not add_raw.isdigit():
+        return jsonify({"error": "invalid add id"}), 400
+
+    add_id = int(add_raw)
+    items = read_items()
+    by_id: Dict[int, Dict[str, str]] = {int(i["id"]): i for i in items}
+    target = by_id.get(item_id)
+    if target is None:
+        return jsonify({"error": "item not found"}), 404
+    if add_id not in by_id:
+        return jsonify({"error": "add id does not exist"}), 400
+    if add_id == item_id:
+        return jsonify({"error": "prerequisite cannot be itself"}), 400
+
+    prereqs, _ = parse_id_list(target.get("prerequisite_ids", ""))
+    prereqs.append(add_id)
+    prereqs = sorted(set(prereqs))
+    target["prerequisite_ids"] = ";".join(str(i) for i in prereqs)
+    target["updated_at"] = current_timestamp()
+
+    try:
+        write_items(list(by_id.values()))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(target)
+
+
 @app.delete("/api/items/<int:item_id>")
 def delete_item(item_id: int):
     items = read_items()
@@ -558,10 +647,13 @@ def delete_item(item_id: int):
     for item in kept:
         parents, _ = parse_id_list(item.get("parent_ids", ""))
         children_list, _ = parse_id_list(item.get("child_ids", ""))
+        prereqs, _ = parse_id_list(item.get("prerequisite_ids", ""))
         parents = [i for i in parents if i != item_id]
         children_list = [i for i in children_list if i != item_id]
+        prereqs = [i for i in prereqs if i != item_id]
         item["parent_ids"] = ";".join(str(i) for i in parents)
         item["child_ids"] = ";".join(str(i) for i in children_list)
+        item["prerequisite_ids"] = ";".join(str(i) for i in prereqs)
 
     try:
         write_items(kept)
