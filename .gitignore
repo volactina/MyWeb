@@ -2,3 +2,6 @@ __pycache__/
 history_bak/
 database.csv
 .pycache_local/
+.venv*/
+node_modules/
+tests/e2e/node_modules/
