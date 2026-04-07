@@ -12,6 +12,7 @@ CSV_HEADERS = [
     "updated_at",
     "urgency_level",
     "project_status",
+    "priority",
     "parent_ids",
     "child_ids",
     "prerequisite_ids",
@@ -23,6 +24,7 @@ CSV_HEADERS = [
 DEFAULT_ITEM_FIELDS: Dict[str, str] = {
     "urgency_level": "0",
     "project_status": "0",
+    "priority": "0",
     "parent_ids": "",
     "child_ids": "",
     "prerequisite_ids": "",
@@ -72,6 +74,8 @@ def normalize_item(row: Dict[str, str]) -> Dict[str, str]:
         normalized["deadline_value"] = ""
     if normalized.get("path") is None:
         normalized["path"] = ""
+    if normalized.get("priority") is None:
+        normalized["priority"] = "0"
 
     for k in CSV_HEADERS:
         normalized.setdefault(k, "")

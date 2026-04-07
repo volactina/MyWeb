@@ -1,11 +1,18 @@
 const form = document.getElementById("item-form");
-const formTitle = document.getElementById("form-title");
+const formTitle = document.getElementById("form-title"); // legacy (removed from page)
 const itemIdInput = document.getElementById("item-id");
 const titleInput = document.getElementById("title");
 const detailInput = document.getElementById("detail");
 const submitBtn = document.getElementById("submit-btn");
 const cancelBtn = document.getElementById("cancel-btn");
 const formMessage = document.getElementById("form-message");
+
+const newItemBtn = document.getElementById("new-item-btn");
+const formModalBackdrop = document.getElementById("form-modal-backdrop");
+const formModalCloseBtn = document.getElementById("form-modal-close");
+const formModalTitle = document.getElementById("form-modal-title");
+const formModalSub = document.getElementById("form-modal-sub");
+const itemsDirHint = document.getElementById("items-dir-hint");
 
 const urgencyLevelSelect = document.getElementById("urgency-level");
 const projectStatusSelect = document.getElementById("project-status");
@@ -26,6 +33,16 @@ const clearBtn = document.getElementById("clear-btn");
 const statusFilterCheckboxes = Array.from(
   document.querySelectorAll('input.status-filter[type="checkbox"]')
 );
+
+const priorityLimitInput = document.getElementById("priority-limit");
+const priorityRefreshBtn = document.getElementById("priority-refresh-btn");
+const priorityItemsBody = document.getElementById("priority-items-body");
+const priorityPanel = document.getElementById("priority-panel");
+const filterPanel = document.getElementById("filter-panel");
+const switchToPriorityBtn = document.getElementById("switch-to-priority");
+const switchToFilterBtn = document.getElementById("switch-to-filter");
+const switcherTitle = document.getElementById("switcher-title");
+const switcherSub = document.getElementById("switcher-sub");
 
 const itemsBody = document.getElementById("items-body");
 const detailModalBackdrop = document.getElementById("detail-modal-backdrop");
@@ -55,6 +72,8 @@ const prereqChoiceSub = document.getElementById("prereq-choice-sub");
 let lastItemsById = new Map();
 let allItemsById = new Map();
 
+let allItemsCache = { atMs: 0, byId: new Map() };
+
 const pathPickerState = {
   mode: "move", // "move" | "pick-parent" | "pick-prereq"
 };
@@ -68,6 +87,21 @@ const prereqState = {
   targetId: null, // string | null (the project we are adding prereq for)
   pendingNewPrereqFor: null, // string | null (after creating new item, link it as prereq of this id)
 };
+
+function openFormModal({ title, sub } = {}) {
+  if (!formModalBackdrop) return;
+  if (formMessage) formMessage.textContent = "";
+  if (formModalTitle && title) formModalTitle.textContent = title;
+  if (formModalSub) formModalSub.textContent = sub || "";
+  formModalBackdrop.style.display = "flex";
+  formModalBackdrop.setAttribute("aria-hidden", "false");
+}
+
+function closeFormModal() {
+  if (!formModalBackdrop) return;
+  formModalBackdrop.style.display = "none";
+  formModalBackdrop.setAttribute("aria-hidden", "true");
+}
 
 function updateFilterUpButton() {
   if (!filterUpBtn) return;
@@ -90,6 +124,7 @@ const VIEW_CONFIG = {
   detailFields: [
     { key: "id", label: "ID" },
     { key: "path", label: "Path" },
+    { key: "priority", label: "优先级" },
     { key: "project_status", label: "项目状态" },
     { key: "blocked_by_ids", label: "待完成前置项目" },
     { key: "prerequisite_ids", label: "前置项目列表" },
@@ -164,7 +199,88 @@ async function loadItems() {
     lastItemsById = new Map();
   }
   updateFilterUpButton();
+  await updateItemsDirHint();
   renderItems(items);
+}
+
+function parsePriority(x) {
+  const raw = String(x ?? "").trim();
+  if (!raw) return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+async function loadTopPriorityItems() {
+  if (!priorityItemsBody) return;
+  const byId = await getAllItemsCached();
+  const items = Array.from(byId.values());
+  items.sort((a, b) => parsePriority(b.priority) - parsePriority(a.priority));
+
+  let limit = 5;
+  if (priorityLimitInput) {
+    const v = String(priorityLimitInput.value || "").trim();
+    const n = v && /^\d+$/.test(v) ? Number(v) : 5;
+    limit = Math.max(1, Math.min(50, n));
+  }
+
+  const top = items.slice(0, limit);
+  if (top.length === 0) {
+    priorityItemsBody.innerHTML = `<tr><td colspan="2">（暂无项目）</td></tr>`;
+    return;
+  }
+
+  priorityItemsBody.innerHTML = top
+    .map((it) => {
+      const id = String(it.id);
+      const title = escapeHtml(it.title || "");
+      return `
+        <tr>
+          <td>${title} <span class="muted">#${escapeHtml(id)}</span></td>
+          <td class="actions">
+            <button type="button" data-action="priority-locate" data-id="${escapeHtml(id)}">定位</button>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function ensureStatusChecked(statusValue) {
+  const v = String(statusValue ?? "").trim();
+  for (const c of statusFilterCheckboxes) {
+    if (String(c.value) === v) {
+      c.checked = true;
+      return;
+    }
+  }
+}
+
+async function getAllItemsCached() {
+  const now = Date.now();
+  if (allItemsCache.byId.size > 0 && now - allItemsCache.atMs < 5000) {
+    return allItemsCache.byId;
+  }
+  const res = await fetch("/api/items?all=1");
+  const items = await res.json();
+  const byId = Array.isArray(items) ? new Map(items.map((i) => [String(i.id), i])) : new Map();
+  allItemsCache = { atMs: now, byId };
+  return byId;
+}
+
+async function updateItemsDirHint() {
+  if (!itemsDirHint) return;
+  const rid = filterRootIdInput ? filterRootIdInput.value.trim() : "";
+  if (!rid) {
+    itemsDirHint.textContent = "当前目录：根目录";
+    return;
+  }
+  const byId = await getAllItemsCached();
+  const cur = byId.get(String(rid));
+  if (!cur) {
+    itemsDirHint.textContent = `当前目录：#${rid}`;
+    return;
+  }
+  itemsDirHint.textContent = `当前目录：${cur.title || ("#" + rid)}`;
 }
 
 function renderItems(items) {
@@ -513,13 +629,15 @@ function pickParentHere() {
 
 function resetForm() {
   itemIdInput.value = "";
-  formTitle.textContent = "Add New Item";
+  if (formTitle) formTitle.textContent = "Add New Item";
   submitBtn.textContent = "Create";
   titleInput.value = "";
   detailInput.value = "";
   urgencyLevelSelect.value = "0";
   projectStatusSelect.value = "0";
-  setFormParentById("");
+  // Default parent is current filter root (if any)
+  const defaultParent = filterRootIdInput ? filterRootIdInput.value.trim() : "";
+  setFormParentById(defaultParent);
   childIdsInput.value = "";
   prerequisiteIdsInput.value = "";
   deadlineValueInput.value = "";
@@ -590,17 +708,20 @@ form.addEventListener("submit", async (event) => {
     }
     resetForm();
     await loadItems();
+    closeFormModal();
     return;
   }
 
   formMessage.textContent = isEdit ? "Item updated." : "Item created.";
   resetForm();
   await loadItems();
+  closeFormModal();
 });
 
 cancelBtn.addEventListener("click", () => {
   formMessage.textContent = "";
   resetForm();
+  closeFormModal();
 });
 
 urgencyLevelSelect.addEventListener("change", () => {
@@ -680,7 +801,7 @@ itemsBody.addEventListener("click", async (event) => {
   if (action === "add-child") {
     // Switch to create mode and pre-fill parent_ids with the current row's id
     itemIdInput.value = "";
-    formTitle.textContent = `Add Child Project (Parent #${id})`;
+    if (formTitle) formTitle.textContent = `Add Child Project (Parent #${id})`;
     submitBtn.textContent = "Create";
     titleInput.value = "";
     detailInput.value = "";
@@ -692,7 +813,7 @@ itemsBody.addEventListener("click", async (event) => {
     deadlineValueInput.value = "";
     syncDeadlineInputControl();
     titleInput.focus();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    openFormModal({ title: `新增子项目（上级 #${id}）` });
     return;
   }
 
@@ -779,8 +900,9 @@ itemsBody.addEventListener("click", async (event) => {
     prerequisiteIdsInput.value = item.prerequisite_ids || "";
     deadlineValueInput.value = item.deadline_value || "";
     syncDeadlineInputControl();
-    formTitle.textContent = `Edit Item #${id}`;
+    if (formTitle) formTitle.textContent = `Edit Item #${id}`;
     submitBtn.textContent = "Save";
+    openFormModal({ title: `编辑项目 #${id}` });
   }
 });
 
@@ -905,6 +1027,7 @@ if (moveModalMoveRootBtn) {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeDetailModal();
   if (e.key === "Escape") closeMoveModal();
+  if (e.key === "Escape") closeFormModal();
 });
 
 function openPrereqChoiceModal(targetId) {
@@ -936,6 +1059,84 @@ if (parentPathBtn) {
   });
 }
 loadItems();
+loadTopPriorityItems();
+
+function setTopPanel(mode) {
+  const isPriority = mode === "priority";
+  if (priorityPanel) priorityPanel.style.display = isPriority ? "" : "none";
+  if (filterPanel) filterPanel.style.display = isPriority ? "none" : "";
+  if (switchToPriorityBtn) switchToPriorityBtn.classList.toggle("primary", isPriority);
+  if (switchToFilterBtn) switchToFilterBtn.classList.toggle("primary", !isPriority);
+  if (switcherTitle) switcherTitle.textContent = isPriority ? "高优先级项目" : "Filter";
+  if (switcherSub)
+    switcherSub.textContent = isPriority
+      ? "展示全局优先级 TopN（只显示标题，可快速定位到所在目录）"
+      : "按目录/状态/标题/详情筛选项目列表";
+}
+
+// Default: show priority panel
+setTopPanel("priority");
+
+if (switchToPriorityBtn) {
+  switchToPriorityBtn.addEventListener("click", () => setTopPanel("priority"));
+}
+if (switchToFilterBtn) {
+  switchToFilterBtn.addEventListener("click", () => setTopPanel("filter"));
+}
+
+if (priorityRefreshBtn) {
+  priorityRefreshBtn.addEventListener("click", () => {
+    allItemsCache = { atMs: 0, byId: new Map() };
+    loadTopPriorityItems();
+  });
+}
+if (priorityLimitInput) {
+  priorityLimitInput.addEventListener("change", () => {
+    loadTopPriorityItems();
+  });
+}
+if (priorityItemsBody) {
+  priorityItemsBody.addEventListener("click", async (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLElement)) return;
+    const action = t.getAttribute("data-action");
+    const id = t.getAttribute("data-id");
+    if (action !== "priority-locate" || !id) return;
+
+    const byId = await getAllItemsCached();
+    const item = byId.get(String(id));
+    if (!item) return;
+
+    // Switch to the directory containing this item (its parent). Root => empty.
+    const parentId = String(item.parent_ids || "").trim();
+    if (filterRootIdInput) filterRootIdInput.value = parentId;
+
+    // Ensure the status filter includes this item's status, otherwise it may be hidden.
+    ensureStatusChecked(String(item.project_status ?? "0"));
+
+    updateFilterUpButton();
+    await loadItems();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
+if (newItemBtn) {
+  newItemBtn.addEventListener("click", () => {
+    resetForm();
+    const pid = filterRootIdInput ? filterRootIdInput.value.trim() : "";
+    openFormModal({
+      title: "新增项目",
+      sub: pid ? `默认上级目录：#${pid}` : "默认上级目录：根目录",
+    });
+    titleInput.focus();
+  });
+}
+if (formModalCloseBtn) formModalCloseBtn.addEventListener("click", closeFormModal);
+if (formModalBackdrop) {
+  formModalBackdrop.addEventListener("click", (e) => {
+    if (e.target === formModalBackdrop) closeFormModal();
+  });
+}
 
 if (prereqChoiceCloseBtn) prereqChoiceCloseBtn.addEventListener("click", closePrereqChoiceModal);
 if (prereqChoiceCancelBtn) prereqChoiceCancelBtn.addEventListener("click", closePrereqChoiceModal);
@@ -953,7 +1154,7 @@ if (prereqChoiceCreateNewBtn) {
 
     // Switch to create mode; user will create a new project, then we will link it as prerequisite.
     itemIdInput.value = "";
-    formTitle.textContent = `新建前置项目（将关联到 #${targetId}）`;
+    if (formTitle) formTitle.textContent = `新建前置项目（将关联到 #${targetId}）`;
     submitBtn.textContent = "Create";
     titleInput.value = "";
     detailInput.value = "";
@@ -965,7 +1166,7 @@ if (prereqChoiceCreateNewBtn) {
     deadlineValueInput.value = "";
     syncDeadlineInputControl();
     titleInput.focus();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    openFormModal({ title: `新建前置项目（关联到 #${targetId}）` });
   });
 }
 if (prereqChoiceLinkExistingBtn) {

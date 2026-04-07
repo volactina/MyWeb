@@ -1,10 +1,14 @@
 const { test, expect } = require("@playwright/test");
 
 async function createProject(page, title) {
+  await page.locator("#new-item-btn").click();
+  await expect(page.locator("#form-modal-backdrop")).toBeVisible();
   await page.locator("#title").fill(title);
   const resPromise = page.waitForResponse((res) => res.url().includes("/api/items") && res.request().method() === "POST");
   await page.locator("#submit-btn").click();
   await resPromise;
+  // form modal should close on success
+  await expect(page.locator("#form-modal-backdrop")).toBeHidden();
 }
 
 async function waitForListReload(page) {
@@ -23,7 +27,18 @@ async function getItemIdByTitle(page, title) {
   return String(found.id);
 }
 
+async function showFilterPanel(page) {
+  // Filter panel is hidden by default (priority panel is default).
+  if (await page.locator("#filter-panel").isVisible()) return;
+  const btn = page.locator("#switch-to-filter");
+  if ((await btn.count()) > 0) {
+    await btn.click();
+  }
+  await expect(page.locator("#filter-panel")).toBeVisible();
+}
+
 async function ensureStatusVisible(page, statusValue) {
+  await showFilterPanel(page);
   const cb = page.locator(`input.status-filter[type="checkbox"][value="${statusValue}"]`);
   if ((await cb.count()) === 0) return;
   if (!(await cb.isChecked())) {
@@ -58,6 +73,7 @@ test("prereq_link_existing_blocks", async ({ page }) => {
 
   // After linking prereq, target becomes blocked (4). Ensure blocked status is visible in list filters.
   await ensureStatusVisible(page, "4");
+  await showFilterPanel(page);
   await page.locator("#search-btn").click();
 
   // Open detail of B target, verify status badge shows blocked and prerequisite_ids includes A's id
@@ -86,6 +102,7 @@ test("move_project_via_modal", async ({ page }) => {
   await page.getByRole("button", { name: "移动到此处" }).click();
 
   // Switch filter root to parent and verify child appears in subtree
+  await showFilterPanel(page);
   await page.locator("#filter-root-id").fill(parentId);
   await page.locator("#search-btn").click();
   await expect(page.locator("tbody#items-body tr", { hasText: "C child" }).first()).toBeVisible();

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Dict, List, Set
 
 from .domain_graph import compute_paths, subtree_ids, validate_references_and_cycles
@@ -98,6 +99,37 @@ def enrich_and_normalize_items(items: List[Dict[str, str]]) -> List[Dict[str, st
     paths = compute_paths(items)
     for item in items:
         item["path"] = paths.get(int(item["id"]), str(item["id"]))
+
+    # Compute derived priority (higher first). Stored as string for CSV compatibility.
+    # Formula is designed to be easy to adjust later:
+    # - Status: in-progress > pending > blocked > completed > cancelled
+    # - Urgency: higher urgency_level -> higher
+    # - Recency: more recently updated -> higher
+    status_weight = {
+        "1": 500,  # 进行中
+        "0": 400,  # 待开始
+        "4": 300,  # 阻塞
+        "2": 100,  # 已完成
+        "5": 0,    # 中止
+    }
+
+    def parse_ts(ts: str) -> int:
+        ts = (ts or "").strip()
+        if not ts:
+            return 0
+        try:
+            return int(datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").timestamp())
+        except ValueError:
+            return 0
+
+    for item in items:
+        st = normalize_project_status(str(item.get("project_status", "0")))
+        urg_raw = str(item.get("urgency_level", "0")).strip()
+        urg = int(urg_raw) if urg_raw.isdigit() else 0
+        urg = max(0, min(4, urg))
+        updated_epoch = parse_ts(str(item.get("updated_at", "")))
+        score = status_weight.get(st, 0) * 1_000_000_000 + urg * 1_000_000 + updated_epoch
+        item["priority"] = str(score)
     return items
 
 

@@ -37,7 +37,9 @@ def list_items():
             allowed = subtree_ids(int(root_id_raw), items)
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
-        items = [i for i in items if int(i["id"]) in allowed]
+        rid = int(root_id_raw)
+        # When browsing inside a directory, hide the directory itself; show children/subtree only.
+        items = [i for i in items if int(i["id"]) in allowed and int(i["id"]) != rid]
     else:
         if all_raw not in {"1", "true", "True"}:
             items = [i for i in items if not str(i.get("parent_ids", "")).strip()]
@@ -55,6 +57,13 @@ def list_items():
         allowed_statuses = set(parts)
         items = [i for i in items if str(i.get("project_status", "0")) in allowed_statuses]
 
+    # Default sort: higher priority first, then id asc for stability.
+    def priority_key(x: Dict[str, str]) -> tuple[int, int]:
+        p_raw = str(x.get("priority", "0")).strip()
+        p = int(p_raw) if p_raw.lstrip("-").isdigit() else 0
+        return (-p, int(x["id"]))
+
+    items.sort(key=priority_key)
     return jsonify(items)
 
 
