@@ -1,0 +1,136 @@
+import os
+from pathlib import Path
+
+import pytest
+
+from backend import create_app
+
+
+@pytest.fixture()
+def tmp_data_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    data_file = tmp_path / "testdatabase.csv"
+    monkeypatch.setenv("MYWEB_DATA_FILE", str(data_file))
+    monkeypatch.setenv("MYWEB_TEST_MODE", "1")
+    return data_file
+
+
+@pytest.fixture()
+def client(tmp_data_file: Path):
+    app = create_app()
+    app.config.update(TESTING=True)
+    return app.test_client()
+
+
+def test_create_and_list_root_only(client):
+    res = client.post(
+        "/api/items",
+        json={
+            "title": "Root A",
+            "detail": "hello",
+            "urgency_level": "0",
+            "project_status": "0",
+        },
+    )
+    assert res.status_code == 201
+    item = res.get_json()
+    assert item["id"] == "1"
+    assert item["title"] == "Root A"
+    assert item["created_at"]
+    assert item["updated_at"]
+
+    res2 = client.get("/api/items")
+    assert res2.status_code == 200
+    items = res2.get_json()
+    assert isinstance(items, list)
+    assert len(items) == 1
+    assert items[0]["title"] == "Root A"
+    assert items[0]["parent_ids"] == ""
+
+
+def test_prereq_blocking_rule(client):
+    # prereq project (not completed)
+    r1 = client.post("/api/items", json={"title": "Prereq", "detail": "", "project_status": "0"})
+    assert r1.status_code == 201
+    prereq_id = r1.get_json()["id"]
+
+    # target project depends on prereq -> should become blocked (4)
+    r2 = client.post(
+        "/api/items",
+        json={"title": "Target", "detail": "", "prerequisite_ids": prereq_id, "project_status": "0"},
+    )
+    assert r2.status_code == 201
+    target_id = r2.get_json()["id"]
+
+    all_items = client.get("/api/items?all=1").get_json()
+    by_id = {str(x["id"]): x for x in all_items}
+    assert by_id[target_id]["project_status"] == "4"
+    assert prereq_id in (by_id[target_id]["blocked_by_ids"] or "")
+
+    # mark prereq completed -> target should become pending (0) and unblocked
+    r3 = client.patch(f"/api/items/{prereq_id}/status", json={"project_status": "2"})
+    assert r3.status_code == 200
+
+    all_items2 = client.get("/api/items?all=1").get_json()
+    by_id2 = {str(x["id"]): x for x in all_items2}
+    assert by_id2[target_id]["project_status"] == "0"
+    assert (by_id2[target_id]["blocked_by_ids"] or "") == ""
+
+
+def test_move_parent_api(client):
+    rp = client.post("/api/items", json={"title": "Parent", "detail": ""})
+    rc = client.post("/api/items", json={"title": "Child", "detail": ""})
+    assert rp.status_code == 201 and rc.status_code == 201
+    parent_id = rp.get_json()["id"]
+    child_id = rc.get_json()["id"]
+
+    mv = client.patch(f"/api/items/{child_id}/parent", json={"parent_id": parent_id})
+    assert mv.status_code == 200
+
+    all_items = client.get("/api/items?all=1").get_json()
+    by_id = {str(x["id"]): x for x in all_items}
+    assert by_id[child_id]["parent_ids"] == parent_id
+
+    mv2 = client.patch(f"/api/items/{child_id}/parent", json={"parent_id": ""})
+    assert mv2.status_code == 200
+    all_items2 = client.get("/api/items?all=1").get_json()
+    by_id2 = {str(x["id"]): x for x in all_items2}
+    assert by_id2[child_id]["parent_ids"] == ""
+
+
+def test_delete_fails_when_has_children(client):
+    rp = client.post("/api/items", json={"title": "Parent", "detail": ""})
+    rc = client.post("/api/items", json={"title": "Child", "detail": ""})
+    parent_id = rp.get_json()["id"]
+    child_id = rc.get_json()["id"]
+
+    mv = client.patch(f"/api/items/{child_id}/parent", json={"parent_id": parent_id})
+    assert mv.status_code == 200
+
+    d = client.delete(f"/api/items/{parent_id}")
+    assert d.status_code == 400
+    data = d.get_json()
+    assert "delete failed" in (data.get("error") or "")
+
+
+def test_add_prereq_endpoint_appends_and_dedups(client):
+    r1 = client.post("/api/items", json={"title": "A", "detail": ""})
+    r2 = client.post("/api/items", json={"title": "B", "detail": ""})
+    a_id = r1.get_json()["id"]
+    b_id = r2.get_json()["id"]
+
+    p1 = client.patch(f"/api/items/{b_id}/prerequisites", json={"add": a_id})
+    assert p1.status_code == 200
+    p2 = client.patch(f"/api/items/{b_id}/prerequisites", json={"add": a_id})
+    assert p2.status_code == 200
+
+    all_items = client.get("/api/items?all=1").get_json()
+    by_id = {str(x["id"]): x for x in all_items}
+    assert by_id[b_id]["prerequisite_ids"] == a_id
+
+
+def test_status_3_normalizes_to_0(client):
+    r = client.post("/api/items", json={"title": "Legacy", "detail": "", "project_status": "3"})
+    assert r.status_code == 201
+    item = r.get_json()
+    assert item["project_status"] == "0"
+

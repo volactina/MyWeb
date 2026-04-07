@@ -189,6 +189,14 @@ def update_item_parent(item_id: int):
     if target is None:
         return jsonify({"error": "item not found"}), 404
 
+    # Remove any stale references from existing parents' child_ids.
+    # Otherwise, the bidirectional sync may "pull back" the old relation.
+    for item in by_id.values():
+        children_list, _ = parse_id_list(item.get("child_ids", ""))
+        if item_id in children_list:
+            children_list = [i for i in children_list if i != item_id]
+            item["child_ids"] = ";".join(str(i) for i in children_list)
+
     if parent_id_raw:
         parent_id = int(parent_id_raw)
         if parent_id not in by_id:

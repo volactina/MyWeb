@@ -104,6 +104,23 @@ const VIEW_CONFIG = {
 
 const itemsHeadRow = document.getElementById("items-head-row");
 
+function getProjectStatusLabel(statusRaw) {
+  const s = String(statusRaw ?? "0");
+  if (s === "1") return "进行中";
+  if (s === "2") return "已完成";
+  if (s === "4") return "阻塞";
+  if (s === "5") return "中止";
+  return "待开始";
+}
+
+function renderProjectStatusBadge(itemOrStatus) {
+  const status = typeof itemOrStatus === "object" ? String(itemOrStatus?.project_status ?? "0") : String(itemOrStatus ?? "0");
+  const normalized = status === "3" ? "0" : status;
+  const cls = `badge status-${escapeHtml(normalized)}`;
+  const label = escapeHtml(getProjectStatusLabel(normalized));
+  return `<span class="${cls}">${label}</span>`;
+}
+
 function syncDeadlineInputControl() {
   const needsDate = urgencyLevelSelect.value === "4";
   if (deadlineValueWrap) {
@@ -163,7 +180,17 @@ function renderItems(items) {
       (item) => `
       <tr>
         ${cols
-          .map((c) => `<td>${escapeHtml(formatValue(c.key, item) || "")}</td>`)
+          .map((c) => {
+            if (c.key === "title") {
+              return `<td><div class="cell-title">${renderProjectStatusBadge(item)}<span>${escapeHtml(
+                String(formatValue(c.key, item) || "")
+              )}</span></div></td>`;
+            }
+            if (c.key === "project_status") {
+              return `<td>${renderProjectStatusBadge(item)}</td>`;
+            }
+            return `<td>${escapeHtml(formatValue(c.key, item) || "")}</td>`;
+          })
           .join("")}
         <td class="actions">
           <button type="button" data-action="detail" data-id="${item.id}">详情</button>
@@ -231,6 +258,9 @@ function openDetailModal(item) {
     <table>
       ${VIEW_CONFIG.detailFields
         .map(({ key, label }) => {
+          if (key === "project_status") {
+            return `<tr><td class="k">${escapeHtml(label)}</td><td>${renderProjectStatusBadge(item)}</td></tr>`;
+          }
           const v = formatValue(key, item);
           return `<tr><td class="k">${escapeHtml(label)}</td><td>${escapeHtml(v || "")}</td></tr>`;
         })

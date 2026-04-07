@@ -27,6 +27,32 @@ python3 app.py
 
 打开 `http://127.0.0.1:5000`
 
+## 如何运行测试
+
+测试使用独立 CSV，不会影响真实数据：
+- **数据文件覆盖**：设置环境变量 `MYWEB_DATA_FILE=/path/to/testdatabase.csv`
+- **强隔离（推荐）**：测试运行会设置 `MYWEB_TEST_MODE=1`，若未正确覆盖数据文件导致指向真实 `database.csv`，程序将直接报错退出
+
+### 后端单元测试（pytest）
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install flask pytest
+pytest -q
+```
+
+### 前端综合功能测试（Playwright）
+
+Playwright 测试在 `tests/e2e/` 下，默认会启动一个测试用 Flask（端口 `5001`）并使用 `tests/e2e/testdatabase.csv`。
+
+```bash
+cd tests/e2e
+npm i
+npx playwright install
+npx playwright test
+```
+
 ## 数据模型（CSV 字段）
 
 `database.csv` 的列头由后端自动维护（缺列会自动补齐并回写）。当前字段：
