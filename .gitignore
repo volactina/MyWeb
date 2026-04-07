@@ -1,5 +1,6 @@
 __pycache__/
 history_bak/
+history_backup/
 database.csv
 .pycache_local/
 .venv*/
