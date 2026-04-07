@@ -1,0 +1,27 @@
+<div id="move-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title" id="move-modal-title">移动项目</h3>
+        <div class="muted" id="move-modal-sub"></div>
+        <div class="crumbs" id="move-modal-crumbs"></div>
+      </div>
+      <button type="button" id="move-modal-close">关闭</button>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary" id="move-modal-move-here">移动到此处</button>
+      <button type="button" id="move-modal-move-root">移动到根目录</button>
+    </div>
+    <table class="folder-list">
+      <thead>
+        <tr>
+          <th>子项目</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="move-modal-list"></tbody>
+    </table>
+    <div class="muted" style="margin-top:10px;" id="move-modal-hint"></div>
+  </div>
+</div>
+

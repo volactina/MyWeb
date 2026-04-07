@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Dict, List, Set
+from typing import Dict, List
 
-from .domain_graph import compute_paths, subtree_ids, validate_references_and_cycles
-from .normalize import CSV_HEADERS, normalize_project_status, parse_id_list
+from .domain_graph import subtree_ids, validate_references_and_cycles
+from .domain.blocking import apply_prerequisite_blocking
+from .domain.enrich import normalize_and_collect_relations, sync_bidirectional_and_enforce_single_parent
+from .domain.paths import apply_paths
+from .domain.priority import compute_priority
+from .normalize import CSV_HEADERS
 from .storage_csv import read_items_raw, write_items_raw
 
 
@@ -25,111 +28,20 @@ def enrich_and_normalize_items(items: List[Dict[str, str]]) -> List[Dict[str, st
     - Apply prerequisite blocking rule
     - Compute multi-level path
     """
-    ids = {int(i["id"]) for i in items}
-
-    raw_parents: Dict[int, List[int]] = {}
-    raw_children: Dict[int, List[int]] = {}
-    raw_prereqs: Dict[int, List[int]] = {}
-    for item in items:
-        this_id = int(item["id"])
-        parents, parents_norm = parse_id_list(item.get("parent_ids", ""))
-        children, children_norm = parse_id_list(item.get("child_ids", ""))
-        prereqs, prereqs_norm = parse_id_list(item.get("prerequisite_ids", ""))
-        item["parent_ids"] = parents_norm
-        item["child_ids"] = children_norm
-        item["prerequisite_ids"] = prereqs_norm
-        raw_parents[this_id] = parents
-        raw_children[this_id] = children
-        raw_prereqs[this_id] = prereqs
-
-        if str(item.get("urgency_level", "0")) != "4":
-            item["deadline_value"] = ""
-
-        item["project_status"] = normalize_project_status(str(item.get("project_status", "0")))
-
-        for k in CSV_HEADERS:
-            item.setdefault(k, "")
-
-    edges: Dict[int, Set[int]] = {i: set() for i in ids}
-    reverse_edges: Dict[int, Set[int]] = {i: set() for i in ids}
-
-    def add_edge(p: int, c: int) -> None:
-        if p in edges:
-            edges[p].add(c)
-        if c in reverse_edges:
-            reverse_edges[c].add(p)
-
-    for child_id, parents in raw_parents.items():
-        for p in parents:
-            add_edge(p, child_id)
-
-    for parent_id, children in raw_children.items():
-        for c in children:
-            add_edge(parent_id, c)
-
-    for item in items:
-        this_id = int(item["id"])
-        parent_list = sorted(reverse_edges.get(this_id, set()))
-        child_list = sorted(edges.get(this_id, set()))
-        if len(parent_list) > 1:
-            raise ValueError(f"each project can only have one parent (id={this_id})")
-        item["parent_ids"] = ";".join(str(i) for i in parent_list)
-        item["child_ids"] = ";".join(str(i) for i in child_list)
+    ids, raw_parents, raw_children, raw_prereqs = normalize_and_collect_relations(items)
+    sync_bidirectional_and_enforce_single_parent(
+        items,
+        ids=ids,
+        raw_parents=raw_parents,
+        raw_children=raw_children,
+    )
 
     validate_references_and_cycles(items)
 
     by_id: Dict[int, Dict[str, str]] = {int(i["id"]): i for i in items}
-    for item in items:
-        this_id = int(item["id"])
-        prereqs = raw_prereqs.get(this_id, [])
-        incomplete: List[int] = []
-        for pre in prereqs:
-            pre_status = str(by_id.get(pre, {}).get("project_status", "0"))
-            if pre_status != "2":
-                incomplete.append(pre)
-
-        if incomplete:
-            item["project_status"] = "4"
-            item["blocked_by_ids"] = ";".join(str(i) for i in sorted(set(incomplete)))
-        else:
-            item["blocked_by_ids"] = ""
-            if prereqs:
-                item["project_status"] = "0"
-
-    paths = compute_paths(items)
-    for item in items:
-        item["path"] = paths.get(int(item["id"]), str(item["id"]))
-
-    # Compute derived priority (higher first). Stored as string for CSV compatibility.
-    # Formula is designed to be easy to adjust later:
-    # - Status: in-progress > pending > blocked > completed > cancelled
-    # - Urgency: higher urgency_level -> higher
-    # - Recency: more recently updated -> higher
-    status_weight = {
-        "1": 500,  # 进行中
-        "0": 400,  # 待开始
-        "4": 300,  # 阻塞
-        "2": 100,  # 已完成
-        "5": 0,    # 中止
-    }
-
-    def parse_ts(ts: str) -> int:
-        ts = (ts or "").strip()
-        if not ts:
-            return 0
-        try:
-            return int(datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").timestamp())
-        except ValueError:
-            return 0
-
-    for item in items:
-        st = normalize_project_status(str(item.get("project_status", "0")))
-        urg_raw = str(item.get("urgency_level", "0")).strip()
-        urg = int(urg_raw) if urg_raw.isdigit() else 0
-        urg = max(0, min(4, urg))
-        updated_epoch = parse_ts(str(item.get("updated_at", "")))
-        score = status_weight.get(st, 0) * 1_000_000_000 + urg * 1_000_000 + updated_epoch
-        item["priority"] = str(score)
+    apply_prerequisite_blocking(items, raw_prereqs=raw_prereqs, by_id=by_id)
+    apply_paths(items)
+    compute_priority(items)
     return items
 
 

@@ -1,6 +1,6 @@
 ## 项目管理平台（Flask + CSV）
 
-一个轻量的“项目管理/任务管理”Demo：后端用 Flask 提供 REST API，前端使用 `templates/index.html` + `static/app.js` 渲染与交互，数据持久化在 `database.csv`（CSV 作为简易数据库）。
+一个轻量的“项目管理/任务管理”Demo：后端用 Flask 提供 REST API，前端使用 Jinja 模板（`templates/index.html`）+ 原生 ES Modules（`static/js/app.js`）渲染与交互，数据持久化在 `database.csv`（CSV 作为简易数据库）。
 
 ## 项目路径与文件结构
 
@@ -10,8 +10,14 @@
   - `app.py`: Flask 应用启动入口（支持 `FLASK_RUN_PORT`、`MYWEB_DEBUG`）
   - `backend/`: 后端模块拆分（路由/业务/归一化/CSV 存储/图算法）
 - **前端**
-  - `templates/index.html`: 管理页面（优先级面板/Filter 面板切换、Items 列表、各类弹窗）
-  - `static/app.js`: 前端交互逻辑（CRUD 请求、过滤查询、列表渲染、弹窗、快速状态按钮、移动/选路径、Add Prereq 两步交互、优先级面板与定位）
+  - `templates/index.html`: 页面主体（extends `templates/base.html`，并 include modal partials）
+  - `templates/base.html`: 基础 head/CSS/JS 引用
+  - `templates/partials/modals/`: 弹窗片段（form/detail/move/prereq_choice）
+  - `static/styles/app.css`: 页面样式（从模板内联抽离）
+  - `static/js/app.js`: 前端入口（ES Modules 组装 API/state/UI）
+  - `static/js/api/`: REST API client（fetch 封装）
+  - `static/js/state/`: 前端状态/缓存（如 all-items 缓存）
+  - `static/js/ui/`: 渲染/格式化/徽章与 modal 组件
 - **数据**
   - `database.csv`: 项目数据存储（首行是表头，后续为记录）
 - **备份**
@@ -93,11 +99,14 @@ npx playwright test
 当前后端已拆分到 `backend/` 包中，`app.py` 仅负责启动与配置。
 
 后端关键模块：
-- `backend/routes.py`: API 路由（`/api/items` CRUD + `PATCH status/parent/prerequisites`）
+- `backend/routes/`: API 路由分层（`backend/routes/__init__.py` + `backend/routes/items.py`）
+- `backend/http/validators.py`: HTTP 参数解析/校验与通用错误响应
+- `backend/services/item_queries.py`: 列表过滤与排序（从路由层抽离）
 - `backend/service_items.py`: 业务归一化与派生字段计算（父子同步、阻塞规则、`path`、`priority`）
 - `backend/domain_graph.py`: 图相关能力（环检测、子树、路径计算）
 - `backend/normalize.py`: 状态/字段缺省/ID 列表解析、CSV headers
 - `backend/storage_csv.py`: CSV 文件读写（支持 `MYWEB_DATA_FILE`、`MYWEB_TEST_MODE` 强隔离）
+- `backend/domain/`: 领域规则拆分（priority/paths/blocking/enrich）
 
 ## 前端模块说明
 
@@ -105,7 +114,7 @@ npx playwright test
   - **顶部切换**：高优先级项目面板 / Filter 面板（默认显示高优先级）
   - **高优先级项目面板**：展示 TopN（可调），每行有“定位”按钮
   - **过滤器**：按上级目录（root）过滤、按状态多选过滤、按标题/详情关键字过滤（通过切换按钮显示）
-  - **列表**：主列表列可配置（见 `static/app.js` 的 `VIEW_CONFIG.listColumns`），Actions 固定存在
+  - **列表**：主列表列可配置（见 `static/js/ui/viewConfig.js` 的 `VIEW_CONFIG.listColumns`），Actions 固定存在
   - **目录提示**：Items 标题旁显示“当前目录：xxx”
   - **按钮位置**：`返回上级` 位于 Items 区域，与 `新增项目` 并列
   - **弹窗**
@@ -114,9 +123,12 @@ npx playwright test
     - 移动/路径选择弹窗：面包屑 + 当前目录列表（复用于“移动项目”和“选择上级路径/关联前置项目”）
     - Add Prereq 选择弹窗：两步交互（新建 / 关联已有）
 
-- **`static/app.js`**
+- **`static/js/app.js`（入口）**
+  - 负责 DOM 绑定、页面流程编排、调用 API、刷新列表/面板
+- **`static/js/ui/viewConfig.js`**
   - `VIEW_CONFIG`: 控制“主列表展示字段”和“详情弹窗展示字段”
-  - `loadItems()/renderItems()`: 获取列表并渲染
+- **`static/js/ui/renderItemsTable.js` / `static/js/ui/renderTableHead.js`**
+  - 获取列表后渲染表头与主列表
   - **默认排序**：列表按后端计算的 `priority` 从高到低返回
   - **目录弹窗复用**
     - `openMoveModal()`：移动项目

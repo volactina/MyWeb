@@ -1,352 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>项目管理平台</title>
-  <style>
-    :root {
-      --bg: #0b1220;
-      --panel: rgba(255, 255, 255, 0.08);
-      --panel-2: rgba(255, 255, 255, 0.06);
-      --border: rgba(255, 255, 255, 0.12);
-      --text: rgba(255, 255, 255, 0.92);
-      --muted: rgba(255, 255, 255, 0.68);
-      --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-      --primary: #5b8cff;
-      --primary-2: #2f77ff;
-      --danger: #ff4d4f;
-      --focus: rgba(91, 140, 255, 0.35);
-      --radius: 14px;
-    }
+{% extends "base.html" %}
 
-    * { box-sizing: border-box; }
-
-    html, body { height: 100%; }
-    body {
-      margin: 0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-      background:
-        radial-gradient(900px 500px at 10% 0%, rgba(91, 140, 255, 0.22), transparent 60%),
-        radial-gradient(800px 500px at 90% 10%, rgba(255, 77, 79, 0.18), transparent 60%),
-        var(--bg);
-      color: var(--text);
-      line-height: 1.5;
-    }
-
-    .container {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 28px 18px 60px;
-    }
-
-    header.hero {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 18px;
-    }
-
-    header.hero h1 {
-      margin: 0;
-      letter-spacing: -0.02em;
-      font-size: 26px;
-    }
-
-    header.hero .sub {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .card {
-      background: linear-gradient(180deg, var(--panel), var(--panel-2));
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px;
-      margin-bottom: 14px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-    }
-
-    .card h2 {
-      margin: 0 0 10px;
-      font-size: 16px;
-      letter-spacing: -0.01em;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    .full {
-      grid-column: 1 / -1;
-    }
-    label {
-      display: block;
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-
-    input, textarea, select {
-      width: 100%;
-      padding: 10px 10px;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      font-size: 14px;
-      background: rgba(0, 0, 0, 0.18);
-      color: var(--text);
-      outline: none;
-      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-    }
-    input:focus, textarea:focus, select:focus {
-      border-color: rgba(91, 140, 255, 0.8);
-      box-shadow: 0 0 0 4px var(--focus);
-      background: rgba(0, 0, 0, 0.22);
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 90px;
-    }
-
-    button {
-      cursor: pointer;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 9px 12px;
-      font-size: 14px;
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--text);
-      transition: transform 0.05s ease, background 0.15s ease, border-color 0.15s ease;
-      user-select: none;
-    }
-    button:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: rgba(255, 255, 255, 0.18);
-    }
-    button:active {
-      transform: translateY(1px);
-    }
-    button.primary {
-      background: linear-gradient(180deg, var(--primary), var(--primary-2));
-      color: #081024;
-      border-color: rgba(91, 140, 255, 0.55);
-      font-weight: 650;
-    }
-
-    button.danger {
-      background: rgba(255, 77, 79, 0.14);
-      border-color: rgba(255, 77, 79, 0.35);
-      color: rgba(255, 255, 255, 0.92);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      overflow: hidden;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-    }
-    th, td {
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 10px 10px;
-      text-align: left;
-      vertical-align: top;
-      font-size: 13px;
-    }
-    th {
-      background: rgba(255, 255, 255, 0.07);
-      color: rgba(255, 255, 255, 0.82);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-
-    tbody tr:nth-child(even) td {
-      background: rgba(255, 255, 255, 0.03);
-    }
-    tbody tr:hover td {
-      background: rgba(91, 140, 255, 0.08);
-    }
-
-    .actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .actions button {
-      width: auto;
-      padding: 6px 10px;
-    }
-    .muted {
-      color: var(--muted);
-      font-size: 13px;
-      margin-top: 10px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 2px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      line-height: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      background: rgba(255, 255, 255, 0.06);
-      color: rgba(255, 255, 255, 0.86);
-      white-space: nowrap;
-      user-select: none;
-    }
-    .badge::before {
-      content: "";
-      width: 8px;
-      height: 8px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.5);
-      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
-    }
-    .badge.status-0 { border-color: rgba(148, 163, 184, 0.35); background: rgba(148, 163, 184, 0.12); color: rgba(255,255,255,0.86); }
-    .badge.status-0::before { background: rgba(148, 163, 184, 0.95); }
-    .badge.status-1 { border-color: rgba(91, 140, 255, 0.45); background: rgba(91, 140, 255, 0.16); }
-    .badge.status-1::before { background: rgba(91, 140, 255, 0.95); }
-    .badge.status-2 { border-color: rgba(34, 197, 94, 0.45); background: rgba(34, 197, 94, 0.14); }
-    .badge.status-2::before { background: rgba(34, 197, 94, 0.95); }
-    .badge.status-4 { border-color: rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.14); }
-    .badge.status-4::before { background: rgba(245, 158, 11, 0.95); }
-    .badge.status-5 { border-color: rgba(255, 77, 79, 0.45); background: rgba(255, 77, 79, 0.14); }
-    .badge.status-5::before { background: rgba(255, 77, 79, 0.95); }
-
-    .cell-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .hint-row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 10px;
-    }
-
-    .kbd {
-      border: 1px solid var(--border);
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.78);
-      background: rgba(0, 0, 0, 0.18);
-    }
-
-    @media (max-width: 760px) {
-      .grid { grid-template-columns: 1fr; }
-      header.hero { align-items: flex-start; flex-direction: column; }
-      th:nth-child(3), td:nth-child(3) { display: none; } /* hide detail column on small screens */
-    }
-
-    .modal-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.55);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 18px;
-      z-index: 50;
-    }
-    .modal {
-      width: min(900px, 100%);
-      max-height: min(80vh, 900px);
-      overflow: auto;
-      background: #0f172a;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      border-radius: var(--radius);
-      box-shadow: 0 16px 45px rgba(0, 0, 0, 0.6);
-      padding: 14px;
-    }
-    .modal-header {
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-      justify-content: space-between;
-      margin-bottom: 10px;
-    }
-    .modal-title {
-      margin: 0;
-      font-size: 16px;
-      letter-spacing: -0.01em;
-    }
-    .modal-body table {
-      margin-top: 8px;
-    }
-    .modal-body td.k {
-      width: 160px;
-      color: rgba(255, 255, 255, 0.75);
-      font-size: 12px;
-    }
-    .modal-body pre {
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      font-size: 12.5px;
-    }
-
-    .crumbs {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      align-items: center;
-      margin-top: 8px;
-    }
-    .crumb {
-      display: inline-flex;
-      gap: 6px;
-      align-items: center;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      background: rgba(255, 255, 255, 0.06);
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      cursor: pointer;
-      user-select: none;
-    }
-    .crumb:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-    .folder-list {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-      border-radius: 12px;
-      overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-    }
-    .folder-list td, .folder-list th {
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 10px 10px;
-      font-size: 13px;
-    }
-    .folder-list th {
-      background: rgba(255, 255, 255, 0.07);
-      color: rgba(255, 255, 255, 0.82);
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-  </style>
-</head>
-<body>
+{% block content %}
   <div class="container">
     <header class="hero">
       <div>
@@ -356,218 +10,91 @@
       <div class="kbd">Tip: use “Search” after typing filters</div>
     </header>
 
-  <section class="card">
-    <div class="hint-row" style="margin-top:0;">
-      <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
-        <h2 style="margin:0;" id="switcher-title">高优先级项目</h2>
-        <span class="muted" id="switcher-sub">展示全局优先级 TopN（只显示标题，可快速定位到所在目录）</span>
-      </div>
-      <div class="actions">
-        <button type="button" id="switch-to-priority" class="primary">高优先级</button>
-        <button type="button" id="switch-to-filter">Filter</button>
-      </div>
-    </div>
-
-    <div id="priority-panel">
-      <div class="actions" style="margin-top:10px;">
-        <input id="priority-limit" inputmode="numeric" style="max-width:120px;" value="5" />
-        <button type="button" id="priority-refresh-btn">刷新</button>
-      </div>
-      <table class="folder-list" style="margin-top:10px;">
-        <thead>
-          <tr>
-            <th>标题</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="priority-items-body"></tbody>
-      </table>
-    </div>
-
-    <div id="filter-panel" style="display:none;">
-      <h2 style="margin:12px 0 10px;">Filter</h2>
-    <div class="grid">
-      <div class="full">
-        <label for="filter-root-id">按上级目录过滤（填写项目ID，只显示该项目及其所有子项目）</label>
+    <section class="card">
+      <div class="hint-row" style="margin-top:0;">
+        <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+          <h2 style="margin:0;" id="switcher-title">高优先级项目</h2>
+          <span class="muted" id="switcher-sub">展示全局优先级 TopN（只显示标题，可快速定位到所在目录）</span>
+        </div>
         <div class="actions">
-          <input id="filter-root-id" inputmode="numeric" placeholder="例如：4" />
+          <button type="button" id="switch-to-priority" class="primary">高优先级</button>
+          <button type="button" id="switch-to-filter">Filter</button>
         </div>
       </div>
-      <div class="full">
-        <label>按项目状态过滤（可多选）</label>
-        <div class="actions">
-          <label><input type="checkbox" class="status-filter" value="0" checked /> 待开始</label>
-          <label><input type="checkbox" class="status-filter" value="1" checked /> 进行中</label>
-          <label><input type="checkbox" class="status-filter" value="2" /> 已完成</label>
-          <label><input type="checkbox" class="status-filter" value="4" /> 阻塞</label>
-          <label><input type="checkbox" class="status-filter" value="5" /> 中止</label>
-        </div>
-      </div>
-      <div>
-        <label for="filter-title">Filter by Name/Title</label>
-        <input id="filter-title" placeholder="contains..." />
-      </div>
-      <div>
-        <label for="filter-detail">Filter by Detail Content</label>
-        <input id="filter-detail" placeholder="contains..." />
-      </div>
-      <div class="actions full">
-        <button type="button" id="search-btn">Search</button>
-        <button type="button" id="clear-btn">Clear</button>
-      </div>
-    </div>
-    </div>
-  </section>
 
-  <section class="card">
-    <div class="hint-row" style="margin-top:0;">
-      <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
-        <h2 style="margin:0;">Items</h2>
-        <span class="muted" id="items-dir-hint"></span>
+      <div id="priority-panel">
+        <div class="actions" style="margin-top:10px;">
+          <input id="priority-limit" inputmode="numeric" style="max-width:120px;" value="5" />
+          <button type="button" id="priority-refresh-btn">刷新</button>
+        </div>
+        <table class="folder-list" style="margin-top:10px;">
+          <thead>
+            <tr>
+              <th>标题</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="priority-items-body"></tbody>
+        </table>
       </div>
-      <div class="actions">
-        <button type="button" id="filter-up-btn">返回上级</button>
-        <button type="button" class="primary" id="new-item-btn">新增项目</button>
-      </div>
-    </div>
-    <table>
-      <thead>
-        <tr id="items-head-row"></tr>
-      </thead>
-      <tbody id="items-body"></tbody>
-    </table>
-  </section>
 
-  </div>
-
-  <div id="form-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="modal">
-      <div class="modal-header">
-        <div>
-          <h3 class="modal-title" id="form-modal-title">新增项目</h3>
-          <div class="muted" id="form-modal-sub">默认使用当前过滤路径作为上级目录</div>
-        </div>
-        <button type="button" id="form-modal-close">关闭</button>
-      </div>
-      <form id="item-form" class="grid">
-        <input type="hidden" id="item-id" />
-        <div>
-          <label for="title">Name/Title</label>
-          <input id="title" name="title" placeholder="e.g. Weekly Plan" required />
-        </div>
-        <div>
-          <label for="detail">Detail Content</label>
-          <textarea id="detail" name="detail" rows="3" placeholder="Write details here..."></textarea>
-        </div>
-        <div>
-          <label for="urgency-level">时间紧急程度</label>
-          <select id="urgency-level" name="urgency_level">
-            <option value="0">0 - 没有明确deadline（缺省值）</option>
-            <option value="1">1 - 最近几日</option>
-            <option value="2">2 - 本周内</option>
-            <option value="3">3 - 本月</option>
-            <option value="4">4 - 具体日期（选择日期记录）</option>
-          </select>
-        </div>
-        <div>
-          <label for="project-status">项目状态</label>
-          <select id="project-status" name="project_status">
-            <option value="0">0 - 待开始</option>
-            <option value="1">1 - 进行中</option>
-            <option value="2">2 - 已完成</option>
-            <option value="4">4 - 阻塞（等待前置完成）</option>
-            <option value="5">5 - 中止</option>
-          </select>
-        </div>
-        <div class="full">
-          <label for="parent-path">上级项目路径</label>
-          <div class="actions">
-            <input id="parent-path" name="parent_path" readonly placeholder="根目录 /" />
-            <button type="button" id="parent-path-btn">选择路径</button>
+      <div id="filter-panel" style="display:none;">
+        <h2 style="margin:12px 0 10px;">Filter</h2>
+        <div class="grid">
+          <div class="full">
+            <label for="filter-root-id">按上级目录过滤（填写项目ID，只显示该项目及其所有子项目）</label>
+            <div class="actions">
+              <input id="filter-root-id" inputmode="numeric" placeholder="例如：4" />
+            </div>
           </div>
-          <input id="parent-ids" name="parent_ids" type="hidden" />
+          <div class="full">
+            <label>按项目状态过滤（可多选）</label>
+            <div class="actions">
+              <label><input type="checkbox" class="status-filter" value="0" checked /> 待开始</label>
+              <label><input type="checkbox" class="status-filter" value="1" checked /> 进行中</label>
+              <label><input type="checkbox" class="status-filter" value="2" /> 已完成</label>
+              <label><input type="checkbox" class="status-filter" value="4" /> 阻塞</label>
+              <label><input type="checkbox" class="status-filter" value="5" /> 中止</label>
+            </div>
+          </div>
+          <div>
+            <label for="filter-title">Filter by Name/Title</label>
+            <input id="filter-title" placeholder="contains..." />
+          </div>
+          <div>
+            <label for="filter-detail">Filter by Detail Content</label>
+            <input id="filter-detail" placeholder="contains..." />
+          </div>
+          <div class="actions full">
+            <button type="button" id="search-btn">Search</button>
+            <button type="button" id="clear-btn">Clear</button>
+          </div>
         </div>
-        <div class="full">
-          <label for="child-ids">下级项目列表（id 用 ; 分隔）</label>
-          <input id="child-ids" name="child_ids" placeholder="例如：10;11" />
-        </div>
-        <div class="full">
-          <label for="prerequisite-ids">前置项目列表（id 用 ; 分隔）</label>
-          <input id="prerequisite-ids" name="prerequisite_ids" placeholder="例如：101;102" />
-        </div>
-        <div class="full" id="deadline-value-wrap">
-          <label for="deadline-value">具体日期（当紧急程度=4时填写）</label>
-          <input id="deadline-value" name="deadline_value" type="date" />
-        </div>
-        <div class="actions full">
-          <button class="primary" type="submit" id="submit-btn">Create</button>
-          <button type="button" id="cancel-btn">取消</button>
-        </div>
-      </form>
-      <div id="form-message" class="muted"></div>
-    </div>
-  </div>
+      </div>
+    </section>
 
-  <div id="detail-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="modal">
-      <div class="modal-header">
-        <div>
-          <h3 class="modal-title" id="detail-modal-title">详情</h3>
-          <div class="muted" id="detail-modal-sub"></div>
+    <section class="card">
+      <div class="hint-row" style="margin-top:0;">
+        <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+          <h2 style="margin:0;">Items</h2>
+          <span class="muted" id="items-dir-hint"></span>
         </div>
-        <button type="button" id="detail-modal-close">关闭</button>
-      </div>
-      <div class="modal-body" id="detail-modal-body"></div>
-    </div>
-  </div>
-
-  <div id="move-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="modal">
-      <div class="modal-header">
-        <div>
-          <h3 class="modal-title" id="move-modal-title">移动项目</h3>
-          <div class="muted" id="move-modal-sub"></div>
-          <div class="crumbs" id="move-modal-crumbs"></div>
+        <div class="actions">
+          <button type="button" id="filter-up-btn">返回上级</button>
+          <button type="button" class="primary" id="new-item-btn">新增项目</button>
         </div>
-        <button type="button" id="move-modal-close">关闭</button>
       </div>
-      <div class="actions">
-        <button type="button" class="primary" id="move-modal-move-here">移动到此处</button>
-        <button type="button" id="move-modal-move-root">移动到根目录</button>
-      </div>
-      <table class="folder-list">
+      <table>
         <thead>
-          <tr>
-            <th>子项目</th>
-            <th>操作</th>
-          </tr>
+          <tr id="items-head-row"></tr>
         </thead>
-        <tbody id="move-modal-list"></tbody>
+        <tbody id="items-body"></tbody>
       </table>
-      <div class="muted" style="margin-top:10px;" id="move-modal-hint"></div>
-    </div>
+    </section>
   </div>
 
-  <div id="prereq-choice-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="modal" style="width: min(520px, 100%);">
-      <div class="modal-header">
-        <div>
-          <h3 class="modal-title" id="prereq-choice-title">添加前置项目</h3>
-          <div class="muted" id="prereq-choice-sub">请选择添加方式</div>
-        </div>
-        <button type="button" id="prereq-choice-close">关闭</button>
-      </div>
-      <div class="actions">
-        <button type="button" class="primary" id="prereq-choice-create-new">新建前置项目</button>
-        <button type="button" id="prereq-choice-link-existing">关联已有项目</button>
-        <button type="button" class="danger" id="prereq-choice-cancel">取消</button>
-      </div>
-      <div class="muted" style="margin-top:10px;" id="prereq-choice-hint">
-        新建：先创建一个新项目，再自动把它设置为当前项目的前置项目。关联：从已有项目中选择一个作为前置项目。
-      </div>
-    </div>
-  </div>
-
-  <script src="/static/app.js"></script>
-</body>
-</html>
+  {% include "partials/modals/_form.html" %}
+  {% include "partials/modals/_detail.html" %}
+  {% include "partials/modals/_move.html" %}
+  {% include "partials/modals/_prereq_choice.html" %}
+{% endblock %}

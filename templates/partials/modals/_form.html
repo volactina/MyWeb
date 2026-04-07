@@ -1,0 +1,68 @@
+<div id="form-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title" id="form-modal-title">新增项目</h3>
+        <div class="muted" id="form-modal-sub">默认使用当前过滤路径作为上级目录</div>
+      </div>
+      <button type="button" id="form-modal-close">关闭</button>
+    </div>
+    <form id="item-form" class="grid">
+      <input type="hidden" id="item-id" />
+      <div>
+        <label for="title">Name/Title</label>
+        <input id="title" name="title" placeholder="e.g. Weekly Plan" required />
+      </div>
+      <div>
+        <label for="detail">Detail Content</label>
+        <textarea id="detail" name="detail" rows="3" placeholder="Write details here..."></textarea>
+      </div>
+      <div>
+        <label for="urgency-level">时间紧急程度</label>
+        <select id="urgency-level" name="urgency_level">
+          <option value="0">0 - 没有明确deadline（缺省值）</option>
+          <option value="1">1 - 最近几日</option>
+          <option value="2">2 - 本周内</option>
+          <option value="3">3 - 本月</option>
+          <option value="4">4 - 具体日期（选择日期记录）</option>
+        </select>
+      </div>
+      <div>
+        <label for="project-status">项目状态</label>
+        <select id="project-status" name="project_status">
+          <option value="0">0 - 待开始</option>
+          <option value="1">1 - 进行中</option>
+          <option value="2">2 - 已完成</option>
+          <option value="4">4 - 阻塞（等待前置完成）</option>
+          <option value="5">5 - 中止</option>
+        </select>
+      </div>
+      <div class="full">
+        <label for="parent-path">上级项目路径</label>
+        <div class="actions">
+          <input id="parent-path" name="parent_path" readonly placeholder="根目录 /" />
+          <button type="button" id="parent-path-btn">选择路径</button>
+        </div>
+        <input id="parent-ids" name="parent_ids" type="hidden" />
+      </div>
+      <div class="full">
+        <label for="child-ids">下级项目列表（id 用 ; 分隔）</label>
+        <input id="child-ids" name="child_ids" placeholder="例如：10;11" />
+      </div>
+      <div class="full">
+        <label for="prerequisite-ids">前置项目列表（id 用 ; 分隔）</label>
+        <input id="prerequisite-ids" name="prerequisite_ids" placeholder="例如：101;102" />
+      </div>
+      <div class="full" id="deadline-value-wrap">
+        <label for="deadline-value">具体日期（当紧急程度=4时填写）</label>
+        <input id="deadline-value" name="deadline_value" type="date" />
+      </div>
+      <div class="actions full">
+        <button class="primary" type="submit" id="submit-btn">Create</button>
+        <button type="button" id="cancel-btn">取消</button>
+      </div>
+    </form>
+    <div id="form-message" class="muted"></div>
+  </div>
+</div>
+
