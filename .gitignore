@@ -1,2 +1,4 @@
 __pycache__/
 history_bak/
+database.csv
+.pycache_local/
