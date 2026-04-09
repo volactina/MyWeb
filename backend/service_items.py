@@ -36,6 +36,11 @@ def enrich_and_normalize_items(items: List[Dict[str, str]]) -> List[Dict[str, st
         raw_children=raw_children,
     )
 
+    # Auto-category rule: if a project has any child projects, treat it as a management project.
+    for item in items:
+        if str(item.get("child_ids", "")).strip():
+            item["project_category"] = "1"
+
     validate_references_and_cycles(items)
 
     by_id: Dict[int, Dict[str, str]] = {int(i["id"]): i for i in items}

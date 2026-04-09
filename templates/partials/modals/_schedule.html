@@ -1,0 +1,24 @@
+<div id="schedule-modal-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal" style="width: min(520px, 100%);">
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title" id="schedule-modal-title">加入日程</h3>
+        <div class="muted" id="schedule-modal-sub"></div>
+      </div>
+      <button type="button" id="schedule-modal-close">关闭</button>
+    </div>
+    <div class="grid" style="margin-top:10px;">
+      <div class="full">
+        <label for="schedule-date">计划执行日期</label>
+        <input id="schedule-date" type="date" />
+      </div>
+      <div class="actions full">
+        <button type="button" class="primary" id="schedule-save-btn">保存</button>
+        <button type="button" id="schedule-clear-btn">清空</button>
+        <button type="button" class="danger" id="schedule-cancel-btn">取消</button>
+      </div>
+      <div class="muted full" id="schedule-message"></div>
+    </div>
+  </div>
+</div>
+

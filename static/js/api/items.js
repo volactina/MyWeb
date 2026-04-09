@@ -69,6 +69,14 @@ export async function patchParent(id, parentIdOrEmpty) {
   });
 }
 
+export async function patchSchedule(id, plannedExecuteDateOrEmpty) {
+  return await fetchJson(`/api/items/${encodeURIComponent(id)}/schedule`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ planned_execute_date: plannedExecuteDateOrEmpty }),
+  });
+}
+
 export async function addPrerequisite(targetId, prerequisiteId) {
   return await fetchJson(`/api/items/${encodeURIComponent(targetId)}/prerequisites`, {
     method: "POST",

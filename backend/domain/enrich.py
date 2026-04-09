@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from typing import Dict, List, Set, Tuple
 
-from ..normalize import CSV_HEADERS, normalize_project_status, parse_id_list
+from ..normalize import (
+    CSV_HEADERS,
+    normalize_economic_benefit_expectation,
+    normalize_project_category,
+    normalize_project_status,
+    parse_id_list,
+)
 
 
 def normalize_and_collect_relations(
@@ -29,6 +35,10 @@ def normalize_and_collect_relations(
             item["deadline_value"] = ""
 
         item["project_status"] = normalize_project_status(str(item.get("project_status", "0")))
+        item["project_category"] = normalize_project_category(str(item.get("project_category", "")))
+        item["economic_benefit_expectation"] = normalize_economic_benefit_expectation(
+            str(item.get("economic_benefit_expectation", ""))
+        )
 
         for k in CSV_HEADERS:
             item.setdefault(k, "")

@@ -7,9 +7,14 @@ function parsePriority(x) {
   return Number.isFinite(n) ? n : 0;
 }
 
-export function renderPriorityPanel({ priorityItemsBody, itemsById, limit }) {
+export function renderPriorityPanel({ priorityItemsBody, itemsById, limit, includeInProgress = false }) {
   if (!priorityItemsBody) return;
-  const items = Array.from((itemsById || new Map()).values());
+  const items = Array.from((itemsById || new Map()).values()).filter((it) => {
+    const st = String(it?.project_status ?? "0");
+    if (st === "4") return false; // never show blocked in high priority panel
+    if (!includeInProgress && st === "1") return false;
+    return true;
+  });
   items.sort((a, b) => parsePriority(b.priority) - parsePriority(a.priority));
 
   const safeLimit = Math.max(1, Math.min(50, Number(limit) || 5));

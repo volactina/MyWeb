@@ -18,6 +18,7 @@
         </div>
         <div class="actions">
           <button type="button" id="switch-to-priority" class="primary">高优先级</button>
+          <button type="button" id="switch-to-daily">日程</button>
           <button type="button" id="switch-to-filter">Filter</button>
         </div>
       </div>
@@ -25,6 +26,10 @@
       <div id="priority-panel">
         <div class="actions" style="margin-top:10px;">
           <input id="priority-limit" inputmode="numeric" style="max-width:120px;" value="5" />
+          <label class="muted" style="display:flex; align-items:center; gap:8px;">
+            <input id="priority-include-inprogress" type="checkbox" />
+            包含进行中
+          </label>
           <button type="button" id="priority-refresh-btn">刷新</button>
         </div>
         <table class="folder-list" style="margin-top:10px;">
@@ -70,6 +75,36 @@
             <button type="button" id="clear-btn">Clear</button>
           </div>
         </div>
+        <table class="folder-list" style="margin-top:12px;">
+          <thead>
+            <tr>
+              <th>匹配项目</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="filter-results-body">
+            <tr><td colspan="2" class="muted">（请先点击 Search）</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="daily-panel" style="display:none;">
+        <div class="actions" style="margin-top:10px; gap:10px; flex-wrap:wrap;">
+          <button type="button" id="daily-prev-btn">前一天</button>
+          <button type="button" id="daily-today-btn" class="primary">今天</button>
+          <button type="button" id="daily-next-btn">后一天</button>
+          <input id="daily-date" type="date" style="max-width:180px;" />
+          <button type="button" id="daily-refresh-btn">刷新</button>
+        </div>
+        <table class="folder-list" style="margin-top:10px;">
+          <thead>
+            <tr>
+              <th>标题</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="daily-items-body"></tbody>
+        </table>
       </div>
     </section>
 
@@ -80,7 +115,14 @@
           <span class="muted" id="items-dir-hint"></span>
         </div>
         <div class="actions">
+          <input type="hidden" id="items-root-id" />
+          <label class="muted" style="display:flex; align-items:center; gap:8px;">
+            <input id="items-show-all" type="checkbox" />
+            显示全部
+          </label>
           <button type="button" id="filter-up-btn">返回上级</button>
+          <button type="button" id="items-root-btn">根项目</button>
+          <button type="button" id="new-inspire-btn">新增灵感</button>
           <button type="button" class="primary" id="new-item-btn">新增项目</button>
         </div>
       </div>
@@ -97,4 +139,5 @@
   {% include "partials/modals/_detail.html" %}
   {% include "partials/modals/_move.html" %}
   {% include "partials/modals/_prereq_choice.html" %}
+  {% include "partials/modals/_schedule.html" %}
 {% endblock %}

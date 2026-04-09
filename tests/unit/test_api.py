@@ -134,3 +134,65 @@ def test_status_3_normalizes_to_0(client):
     item = r.get_json()
     assert item["project_status"] == "0"
 
+
+def test_economic_benefit_expectation_defaults_to_4(client):
+    r = client.post("/api/items", json={"title": "NoEconField", "detail": ""})
+    assert r.status_code == 201
+    assert r.get_json().get("economic_benefit_expectation") == "4"
+
+
+def test_economic_benefit_expectation_affects_priority_sort(client):
+    client.post(
+        "/api/items",
+        json={"title": "LowEcon", "detail": "", "economic_benefit_expectation": "5"},
+    )
+    client.post(
+        "/api/items",
+        json={"title": "HighEcon", "detail": "", "economic_benefit_expectation": "0"},
+    )
+    items = client.get("/api/items?all=1").get_json()
+    titles = [x["title"] for x in items]
+    assert titles.index("HighEcon") < titles.index("LowEcon")
+
+
+def test_project_category_defaults_to_2(client):
+    r = client.post("/api/items", json={"title": "NoCatField", "detail": ""})
+    assert r.status_code == 201
+    assert r.get_json().get("project_category") == "2"
+
+
+def test_project_category_auto_sets_to_manage_when_has_children(client):
+    rp = client.post("/api/items", json={"title": "Parent", "detail": "", "project_category": "2"})
+    rc = client.post("/api/items", json={"title": "Child", "detail": ""})
+    parent_id = rp.get_json()["id"]
+    child_id = rc.get_json()["id"]
+    mv = client.patch(f"/api/items/{child_id}/parent", json={"parent_id": parent_id})
+    assert mv.status_code == 200
+
+    all_items = client.get("/api/items?all=1").get_json()
+    by_id = {str(x["id"]): x for x in all_items}
+    assert by_id[parent_id]["child_ids"].strip() != ""
+    assert by_id[parent_id]["project_category"] == "1"
+
+
+def test_project_category_affects_priority_sort(client):
+    client.post("/api/items", json={"title": "Manage", "detail": "", "project_category": "1"})
+    client.post("/api/items", json={"title": "Exec", "detail": "", "project_category": "2"})
+    items = client.get("/api/items?all=1").get_json()
+    titles = [x["title"] for x in items]
+    assert titles.index("Exec") < titles.index("Manage")
+
+
+def test_schedule_patch_sets_planned_execute_date(client):
+    r = client.post("/api/items", json={"title": "Sched", "detail": ""})
+    item_id = r.get_json()["id"]
+    p = client.patch(f"/api/items/{item_id}/schedule", json={"planned_execute_date": "2026-01-02"})
+    assert p.status_code == 200
+    assert p.get_json().get("planned_execute_date") == "2026-01-02"
+    assert p.get_json().get("project_status") == "1"
+
+    all_items = client.get("/api/items?all=1").get_json()
+    by_id = {str(x["id"]): x for x in all_items}
+    assert by_id[item_id]["planned_execute_date"] == "2026-01-02"
+    assert by_id[item_id]["project_status"] == "1"
+

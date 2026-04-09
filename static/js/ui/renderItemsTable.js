@@ -2,7 +2,7 @@ import { escapeHtml } from "../util/escapeHtml.js";
 import { renderProjectStatusBadge } from "./badges.js";
 import { formatValue } from "./formatters.js";
 
-export function renderItemsTable({ itemsBody, items, viewConfig }) {
+export function renderItemsTable({ itemsBody, items, viewConfig, locatedItemId = null }) {
   if (!itemsBody) return;
   if (!Array.isArray(items) || items.length === 0) {
     const colspan = Math.max(1, (viewConfig?.listColumns?.length || 0)) + 1;
@@ -13,8 +13,11 @@ export function renderItemsTable({ itemsBody, items, viewConfig }) {
   const cols = viewConfig?.listColumns || [];
   itemsBody.innerHTML = items
     .map(
-      (item) => `
-      <tr>
+      (item) => {
+        const id = String(item?.id ?? "");
+        const isLocated = locatedItemId != null && String(locatedItemId) === id;
+        return `
+      <tr data-item-id="${escapeHtml(id)}" class="${isLocated ? "locate-highlight" : ""}">
         ${cols
           .map((c) => {
             if (c.key === "title") {
@@ -35,6 +38,7 @@ export function renderItemsTable({ itemsBody, items, viewConfig }) {
           <button type="button" data-action="move" data-id="${item.id}">移动</button>
           <button type="button" data-action="add-child" data-id="${item.id}">Add Child</button>
           <button type="button" data-action="add-prereq" data-id="${item.id}">Add Prereq</button>
+          <button type="button" data-action="add-schedule" data-id="${item.id}">加入日程</button>
           ${
             String(item.project_status ?? "0") === "1"
               ? `<button type="button" data-action="set-status" data-id="${item.id}" data-status="0">暂停</button>`
@@ -50,6 +54,7 @@ export function renderItemsTable({ itemsBody, items, viewConfig }) {
         </td>
       </tr>
     `
+      }
     )
     .join("");
 }

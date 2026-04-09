@@ -37,6 +37,26 @@
           <option value="5">5 - 中止</option>
         </select>
       </div>
+      <div>
+        <label for="project-category">项目分类</label>
+        <select id="project-category" name="project_category">
+          <option value="0">0 - 待定</option>
+          <option value="1">1 - 管理项目（有下级项目将自动设置为管理项目）</option>
+          <option value="2">2 - 执行项目（缺省值）</option>
+          <option value="3">3 - 灵感项目</option>
+        </select>
+      </div>
+      <div>
+        <label for="economic-benefit-expectation">项目经济效益预期</label>
+        <select id="economic-benefit-expectation" name="economic_benefit_expectation">
+          <option value="0">0 - 项目已经产生收益</option>
+          <option value="1">1 - 经分析，短期就能开始产生收益</option>
+          <option value="2">2 - 经分析，短期不会过度消耗资金（也不会产生收益），未来能产生收益</option>
+          <option value="3">3 - 有望产生收益，但收益情况不明朗需分析</option>
+          <option value="4">4 - 不涉及（缺省值）</option>
+          <option value="5">5 - 需要投入资金，但预期不会产生收益（或遥遥无期）</option>
+        </select>
+      </div>
       <div class="full">
         <label for="parent-path">上级项目路径</label>
         <div class="actions">

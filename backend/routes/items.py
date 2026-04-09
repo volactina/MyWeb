@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Dict
 
 from flask import Blueprint, jsonify, request
 
 from ..http.validators import bad_request, not_found, parse_int_str, parse_statuses_csv
-from ..normalize import current_timestamp, normalize_project_status, parse_id_list
+from ..normalize import (
+    current_timestamp,
+    normalize_economic_benefit_expectation,
+    normalize_planned_execute_date,
+    normalize_project_category,
+    normalize_project_status,
+    parse_id_list,
+)
 from ..service_items import next_id, read_items, subtree_ids, write_items
 from ..services.item_queries import apply_filters, sort_by_priority
 
@@ -58,12 +66,25 @@ def register_item_routes(bp: Blueprint) -> None:
         detail = (payload.get("detail") or "").strip()
         urgency_level = str(payload.get("urgency_level") if payload.get("urgency_level") is not None else "0").strip()
         project_status = normalize_project_status(
-            str(payload.get("project_status") if payload.get("project_status") is not None else "0")
+            str(payload.get("project_status") if payload.get("project_status") is not None else "1")
+        )
+        project_category = normalize_project_category(
+            str(payload.get("project_category")) if payload.get("project_category") is not None else ""
         )
         parent_ids = (payload.get("parent_ids") or "").strip()
         child_ids = (payload.get("child_ids") or "").strip()
         prerequisite_ids = (payload.get("prerequisite_ids") or "").strip()
         deadline_value = (payload.get("deadline_value") or "").strip()
+        economic_benefit_expectation = normalize_economic_benefit_expectation(
+            str(payload.get("economic_benefit_expectation"))
+            if payload.get("economic_benefit_expectation") is not None
+            else ""
+        )
+        planned_execute_date = normalize_planned_execute_date(
+            str(payload.get("planned_execute_date")) if payload.get("planned_execute_date") is not None else ""
+        )
+        if project_status == "1" and not planned_execute_date:
+            planned_execute_date = datetime.now().strftime("%Y-%m-%d")
 
         if not title:
             return bad_request("title is required")
@@ -78,6 +99,9 @@ def register_item_routes(bp: Blueprint) -> None:
             "updated_at": now,
             "urgency_level": urgency_level if urgency_level in {"0", "1", "2", "3", "4"} else "0",
             "project_status": project_status,
+            "project_category": project_category,
+            "economic_benefit_expectation": economic_benefit_expectation,
+            "planned_execute_date": planned_execute_date,
             "parent_ids": parent_ids,
             "child_ids": child_ids,
             "prerequisite_ids": prerequisite_ids,
@@ -120,10 +144,32 @@ def register_item_routes(bp: Blueprint) -> None:
         if target is None:
             return not_found("item not found")
 
+        if payload.get("project_category") is not None:
+            project_category = normalize_project_category(str(payload.get("project_category")))
+        else:
+            project_category = normalize_project_category(str(target.get("project_category", "")))
+
+        if payload.get("economic_benefit_expectation") is not None:
+            economic_benefit_expectation = normalize_economic_benefit_expectation(
+                str(payload.get("economic_benefit_expectation"))
+            )
+        else:
+            economic_benefit_expectation = normalize_economic_benefit_expectation(
+                str(target.get("economic_benefit_expectation", ""))
+            )
+
+        if payload.get("planned_execute_date") is not None:
+            planned_execute_date = normalize_planned_execute_date(str(payload.get("planned_execute_date")))
+        else:
+            planned_execute_date = normalize_planned_execute_date(str(target.get("planned_execute_date", "")))
+
         target["title"] = title
         target["detail"] = detail
         target["urgency_level"] = urgency_level if urgency_level in {"0", "1", "2", "3", "4"} else "0"
         target["project_status"] = project_status
+        target["project_category"] = project_category
+        target["economic_benefit_expectation"] = economic_benefit_expectation
+        target["planned_execute_date"] = planned_execute_date
         target["parent_ids"] = parent_ids
         target["child_ids"] = child_ids
         target["prerequisite_ids"] = prerequisite_ids
@@ -236,6 +282,40 @@ def register_item_routes(bp: Blueprint) -> None:
 
         try:
             write_items(list(by_id.values()))
+        except ValueError as e:
+            return bad_request(str(e))
+
+        return jsonify(target)
+
+    @bp.patch("/api/items/<int:item_id>/schedule")
+    def update_item_schedule(item_id: int):
+        payload = request.get_json(silent=True) or {}
+        planned_execute_date = normalize_planned_execute_date(
+            str(payload.get("planned_execute_date")) if payload.get("planned_execute_date") is not None else ""
+        )
+
+        items = read_items()
+        target = None
+        for item in items:
+            if int(item["id"]) == item_id:
+                target = item
+                break
+        if target is None:
+            return not_found("item not found")
+
+        if not planned_execute_date and str(target.get("project_status", "0")) == "2":
+            return bad_request("无法清空已完成项目")
+
+        target["planned_execute_date"] = planned_execute_date
+        # If a project is scheduled, treat it as "in progress" (unless it's blocked).
+        if planned_execute_date and str(target.get("project_status", "0")) != "4":
+            target["project_status"] = "1"
+        # If schedule is cleared, treat it as pending (unless it's blocked).
+        if not planned_execute_date and str(target.get("project_status", "0")) != "4":
+            target["project_status"] = "0"
+        target["updated_at"] = current_timestamp()
+        try:
+            write_items(items)
         except ValueError as e:
             return bad_request(str(e))
 
