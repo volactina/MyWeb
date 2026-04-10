@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -128,11 +129,159 @@ def test_add_prereq_endpoint_appends_and_dedups(client):
     assert by_id[b_id]["prerequisite_ids"] == a_id
 
 
-def test_status_3_normalizes_to_0(client):
-    r = client.post("/api/items", json={"title": "Legacy", "detail": "", "project_status": "3"})
+def test_status_3_keeps_planned(client):
+    r = client.post("/api/items", json={"title": "Planned", "detail": "", "project_status": "3"})
     assert r.status_code == 201
     item = r.get_json()
-    assert item["project_status"] == "0"
+    assert item["project_status"] == "3"
+    assert item.get("planned_execute_date") == datetime.now().strftime("%Y-%m-%d")
+
+
+def test_default_project_status_is_planned_when_omitted(client):
+    r = client.post("/api/items", json={"title": "DefaultStatus", "detail": ""})
+    assert r.status_code == 201
+    assert r.get_json().get("project_status") == "3"
+    assert r.get_json().get("planned_execute_date") == datetime.now().strftime("%Y-%m-%d")
+
+
+def test_status_patch_to_planned_sets_today_when_no_schedule(client):
+    r = client.post("/api/items", json={"title": "Later", "detail": "", "project_status": "0"})
+    item_id = r.get_json()["id"]
+    assert not (r.get_json().get("planned_execute_date") or "").strip()
+    p = client.patch(f"/api/items/{item_id}/status", json={"project_status": "3"})
+    assert p.status_code == 200
+    assert p.get_json().get("project_status") == "3"
+    assert p.get_json().get("planned_execute_date") == datetime.now().strftime("%Y-%m-%d")
+
+
+def test_status_3_keeps_explicit_planned_execute_date(client):
+    r = client.post(
+        "/api/items",
+        json={
+            "title": "DatedPlan",
+            "detail": "",
+            "project_status": "3",
+            "planned_execute_date": "2027-06-01",
+        },
+    )
+    assert r.status_code == 201
+    assert r.get_json().get("planned_execute_date") == "2027-06-01"
+
+
+def test_planned_time_roundtrip(client):
+    r = client.post(
+        "/api/items",
+        json={"title": "WithTime", "detail": "", "planned_time": "09:30"},
+    )
+    assert r.status_code == 201
+    assert r.get_json().get("planned_time") == "09:30"
+    item_id = r.get_json()["id"]
+    u = client.put(
+        f"/api/items/{item_id}",
+        json={"title": "WithTime", "detail": "", "planned_time": "14:00"},
+    )
+    assert u.status_code == 200
+    assert u.get_json().get("planned_time") == "14:00"
+
+
+def test_in_progress_limit_enforced(client, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MYWEB_MAX_IN_PROGRESS", "2")
+    for i in range(2):
+        r = client.post("/api/items", json={"title": f"In{i}", "detail": "", "project_status": "1"})
+        assert r.status_code == 201
+    r3 = client.post("/api/items", json={"title": "OverCap", "detail": "", "project_status": "1"})
+    assert r3.status_code == 400
+    assert "上限" in (r3.get_json().get("error") or "")
+
+
+def test_schedule_keep_status_preserves_status(client):
+    r = client.post("/api/items", json={"title": "KeepSt", "detail": "", "project_status": "0"})
+    item_id = r.get_json()["id"]
+    future = (datetime.now().date() + timedelta(days=5)).isoformat()
+    p = client.patch(
+        f"/api/items/{item_id}/schedule",
+        json={"planned_execute_date": future, "keep_status": True},
+    )
+    assert p.status_code == 200
+    assert p.get_json().get("project_status") == "0"
+
+
+def test_schedule_patch_in_progress_to_non_today_becomes_planned(client):
+    future = (datetime.now().date() + timedelta(days=15)).isoformat()
+    r = client.post("/api/items", json={"title": "InProg", "detail": "", "project_status": "1"})
+    item_id = r.get_json()["id"]
+    p = client.patch(
+        f"/api/items/{item_id}/schedule",
+        json={"planned_execute_date": future},
+    )
+    assert p.status_code == 200
+    assert p.get_json().get("planned_execute_date") == future
+    assert p.get_json().get("project_status") == "3"
+
+
+def test_schedule_patch_in_progress_keep_status_preserves_in_progress(client):
+    future = (datetime.now().date() + timedelta(days=20)).isoformat()
+    r = client.post("/api/items", json={"title": "Roll", "detail": "", "project_status": "1"})
+    item_id = r.get_json()["id"]
+    p = client.patch(
+        f"/api/items/{item_id}/schedule",
+        json={"planned_execute_date": future, "keep_status": True},
+    )
+    assert p.status_code == 200
+    assert p.get_json().get("project_status") == "1"
+
+
+def test_schedule_patch_in_progress_same_day_stays_in_progress(client):
+    r = client.post("/api/items", json={"title": "TodayIp", "detail": "", "project_status": "1"})
+    item_id = r.get_json()["id"]
+    today = r.get_json().get("planned_execute_date")
+    assert today
+    p = client.patch(
+        f"/api/items/{item_id}/schedule",
+        json={"planned_execute_date": today},
+    )
+    assert p.status_code == 200
+    assert p.get_json().get("project_status") == "1"
+
+
+def test_schedule_patch_incomplete_past_date_rejected(client):
+    past = (datetime.now().date() - timedelta(days=2)).isoformat()
+    r = client.post("/api/items", json={"title": "NoPast", "detail": "", "project_status": "0"})
+    item_id = r.get_json()["id"]
+    p = client.patch(f"/api/items/{item_id}/schedule", json={"planned_execute_date": past})
+    assert p.status_code == 400
+    assert "过去" in (p.get_json().get("error") or "")
+
+
+def test_completed_item_may_patch_schedule_to_past(client):
+    past = (datetime.now().date() - timedelta(days=10)).isoformat()
+    r = client.post("/api/items", json={"title": "Done", "detail": "", "project_status": "2"})
+    item_id = r.get_json()["id"]
+    p = client.patch(f"/api/items/{item_id}/schedule", json={"planned_execute_date": past})
+    assert p.status_code == 200
+    assert p.get_json().get("planned_execute_date") == past
+
+
+def test_put_incomplete_past_planned_execute_date_rejected(client):
+    r = client.post("/api/items", json={"title": "Put", "detail": "", "project_status": "0"})
+    item_id = r.get_json()["id"]
+    past = (datetime.now().date() - timedelta(days=1)).isoformat()
+    u = client.put(
+        f"/api/items/{item_id}",
+        json={"title": "Put", "detail": "", "planned_execute_date": past},
+    )
+    assert u.status_code == 400
+    assert "过去" in (u.get_json().get("error") or "")
+
+
+def test_create_incomplete_with_past_schedule_rejected(client):
+    past = (datetime.now().date() - timedelta(days=3)).isoformat()
+    r = client.post(
+        "/api/items",
+        json={"title": "BadCreate", "detail": "", "project_status": "3", "planned_execute_date": past},
+    )
+    assert r.status_code == 400
+    assert "过去" in (r.get_json().get("error") or "")
 
 
 def test_economic_benefit_expectation_defaults_to_4(client):
@@ -183,16 +332,18 @@ def test_project_category_affects_priority_sort(client):
     assert titles.index("Exec") < titles.index("Manage")
 
 
-def test_schedule_patch_sets_planned_execute_date(client):
+def test_schedule_patch_sets_planned_execute_date_and_planned_status(client):
     r = client.post("/api/items", json={"title": "Sched", "detail": ""})
     item_id = r.get_json()["id"]
-    p = client.patch(f"/api/items/{item_id}/schedule", json={"planned_execute_date": "2026-01-02"})
+    assert r.get_json().get("project_status") == "3"
+    future = (datetime.now().date() + timedelta(days=8)).isoformat()
+    p = client.patch(f"/api/items/{item_id}/schedule", json={"planned_execute_date": future})
     assert p.status_code == 200
-    assert p.get_json().get("planned_execute_date") == "2026-01-02"
-    assert p.get_json().get("project_status") == "1"
+    assert p.get_json().get("planned_execute_date") == future
+    assert p.get_json().get("project_status") == "3"
 
     all_items = client.get("/api/items?all=1").get_json()
     by_id = {str(x["id"]): x for x in all_items}
-    assert by_id[item_id]["planned_execute_date"] == "2026-01-02"
-    assert by_id[item_id]["project_status"] == "1"
+    assert by_id[item_id]["planned_execute_date"] == future
+    assert by_id[item_id]["project_status"] == "3"
 

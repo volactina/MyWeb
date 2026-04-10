@@ -32,6 +32,7 @@
         <select id="project-status" name="project_status">
           <option value="0">0 - 待开始</option>
           <option value="1">1 - 进行中</option>
+          <option value="3">3 - 计划中</option>
           <option value="2">2 - 已完成</option>
           <option value="4">4 - 阻塞（等待前置完成）</option>
           <option value="5">5 - 中止</option>
@@ -76,6 +77,10 @@
       <div class="full" id="deadline-value-wrap">
         <label for="deadline-value">具体日期（当紧急程度=4时填写）</label>
         <input id="deadline-value" name="deadline_value" type="date" />
+      </div>
+      <div>
+        <label for="planned-time">计划时间</label>
+        <input id="planned-time" name="planned_time" type="time" />
       </div>
       <div class="actions full">
         <button class="primary" type="submit" id="submit-btn">Create</button>

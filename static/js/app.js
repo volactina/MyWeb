@@ -37,6 +37,7 @@ const childIdsInput = document.getElementById("child-ids");
 const prerequisiteIdsInput = document.getElementById("prerequisite-ids");
 const deadlineValueInput = document.getElementById("deadline-value");
 const deadlineValueWrap = document.getElementById("deadline-value-wrap");
+const plannedTimeInput = document.getElementById("planned-time");
 
 const filterTitleInput = document.getElementById("filter-title");
 const filterDetailInput = document.getElementById("filter-detail");
@@ -78,6 +79,7 @@ const scheduleModalTitle = document.getElementById("schedule-modal-title");
 const scheduleModalSub = document.getElementById("schedule-modal-sub");
 const scheduleDateInput = document.getElementById("schedule-date");
 const scheduleSaveBtn = document.getElementById("schedule-save-btn");
+const schedulePauseBtn = document.getElementById("schedule-pause-btn");
 const scheduleClearBtn = document.getElementById("schedule-clear-btn");
 const scheduleMessage = document.getElementById("schedule-message");
 
@@ -190,7 +192,7 @@ function getFilterSearchParams() {
 async function loadItems() {
   const rootId = getItemsBrowseRootId();
   const showAll = Boolean(itemsShowAllCheckbox?.checked);
-  const statuses = showAll ? [] : ["0", "1"]; // hide 已完成(2) / 阻塞(4) / 中止(5)
+  const statuses = showAll ? [] : ["0", "1", "3"]; // hide 已完成(2) / 阻塞(4) / 中止(5)
 
   const items = await listItems({
     parentId: rootId,
@@ -365,15 +367,18 @@ async function runScheduleRolloverOncePerDay() {
     if (!d) return false;
     if (!isYmdBefore(d, today)) return false;
     const st = String(it?.project_status ?? "0");
-    // Only roll forward if not finished/stopped.
-    return st !== "2" && st !== "5";
+    // 今天以前的日程：计划中/进行中顺延一天，保留状态
+    return st === "1" || st === "3";
   });
 
   if (overdue.length > 0) {
     for (const it of overdue) {
       const id = String(it.id);
+      const d = String(it.planned_execute_date || "").trim();
+      const next = addDays(d, 1);
+      if (!next) continue;
       try {
-        await patchSchedule(id, today);
+        await patchSchedule(id, next, { keepStatus: true });
       } catch {
         // ignore individual failures
       }
@@ -407,6 +412,19 @@ async function loadDailyItems() {
       const id = String(it.id);
       const title = escapeHtml(it.title || "");
       const badge = renderProjectStatusBadge(it);
+      const st = String(it.project_status ?? "0");
+      const pauseBtn =
+        st === "1"
+          ? `<button type="button" data-action="daily-pause" data-id="${escapeHtml(id)}">暂停</button>`
+          : "";
+      const startBtn =
+        st === "3"
+          ? `<button type="button" data-action="daily-start" data-id="${escapeHtml(id)}">开始</button>`
+          : "";
+      const completeBtn =
+        st === "2"
+          ? `<button type="button" data-action="daily-undo-complete" data-id="${escapeHtml(id)}">撤销完成</button>`
+          : `<button type="button" data-action="daily-complete" data-id="${escapeHtml(id)}">完成</button>`;
       return `
         <tr>
           <td><div class="cell-title">${badge}<span>${title}</span> <span class="muted">#${escapeHtml(id)}</span></div></td>
@@ -414,7 +432,9 @@ async function loadDailyItems() {
             <button type="button" data-action="daily-locate" data-id="${escapeHtml(id)}">定位</button>
             <button type="button" data-action="daily-detail" data-id="${escapeHtml(id)}">详情</button>
             <button type="button" data-action="daily-reschedule" data-id="${escapeHtml(id)}">改期</button>
-            <button type="button" data-action="daily-complete" data-id="${escapeHtml(id)}">完成</button>
+            ${startBtn}
+            ${pauseBtn}
+            ${completeBtn}
           </td>
         </tr>
       `;
@@ -429,6 +449,9 @@ function openScheduleModal(targetId, { defaultDate } = {}) {
   if (scheduleModalTitle) scheduleModalTitle.textContent = item?.title ? `加入日程：${item.title}` : "加入日程";
   if (scheduleModalSub) scheduleModalSub.textContent = `项目 #${String(targetId)}`;
   if (scheduleMessage) scheduleMessage.textContent = "";
+  if (schedulePauseBtn) {
+    schedulePauseBtn.hidden = String(item?.project_status ?? "0") !== "1";
+  }
   const initial =
     String(defaultDate || "").trim() ||
     String(item?.planned_execute_date || "").trim() ||
@@ -673,7 +696,7 @@ function resetForm() {
   titleInput.value = "";
   detailInput.value = "";
   urgencyLevelSelect.value = "0";
-  projectStatusSelect.value = "1";
+  projectStatusSelect.value = "3";
   if (projectCategorySelect) projectCategorySelect.value = "2";
   if (economicBenefitSelect) economicBenefitSelect.value = "4";
   const defaultParent = itemsRootIdInput ? itemsRootIdInput.value.trim() : "";
@@ -681,6 +704,7 @@ function resetForm() {
   childIdsInput.value = "";
   prerequisiteIdsInput.value = "";
   deadlineValueInput.value = "";
+  if (plannedTimeInput) plannedTimeInput.value = "";
   syncDeadlineInputControl();
 }
 
@@ -696,6 +720,7 @@ form?.addEventListener("submit", async (event) => {
     project_status: projectStatusSelect.value,
     project_category: projectCategorySelect ? projectCategorySelect.value : "2",
     economic_benefit_expectation: economicBenefitSelect ? economicBenefitSelect.value : "4",
+    planned_time: plannedTimeInput ? plannedTimeInput.value.trim() : "",
     parent_ids: parentIdsInput.value.trim(),
     child_ids: childIdsInput.value.trim(),
     prerequisite_ids: prerequisiteIdsInput.value.trim(),
@@ -707,7 +732,12 @@ form?.addEventListener("submit", async (event) => {
   try {
     createdOrUpdated = isEdit ? await updateItem(id, payload) : await createItem(payload);
   } catch (e) {
-    formMessage.textContent = String(e?.message || e || "Request failed.");
+    const msg = String(e?.message || e || "Request failed.");
+    const hint =
+      msg.includes("进行中项目数量已达上限") || msg.includes("上限")
+        ? " 可将部分「进行中」改为「计划中」后再试。"
+        : "";
+    formMessage.textContent = msg + hint;
     return;
   }
 
@@ -773,7 +803,7 @@ clearBtn?.addEventListener("click", () => {
   updateFilterUpButton();
   filterTitleInput.value = "";
   filterDetailInput.value = "";
-  for (const c of statusFilterCheckboxes) c.checked = c.value === "0" || c.value === "1";
+  for (const c of statusFilterCheckboxes) c.checked = c.value === "0" || c.value === "1" || c.value === "3";
   if (filterResultsBody) {
     filterResultsBody.innerHTML = `<tr><td colspan="2" class="muted">（请先点击 Search）</td></tr>`;
   }
@@ -838,13 +868,14 @@ itemsBody?.addEventListener("click", async (event) => {
     titleInput.value = "";
     detailInput.value = "";
     urgencyLevelSelect.value = "0";
-    projectStatusSelect.value = "1";
+    projectStatusSelect.value = "3";
     if (projectCategorySelect) projectCategorySelect.value = "2";
     if (economicBenefitSelect) economicBenefitSelect.value = "4";
     setFormParentById(id);
     childIdsInput.value = "";
     prerequisiteIdsInput.value = "";
     deadlineValueInput.value = "";
+    if (plannedTimeInput) plannedTimeInput.value = "";
     syncDeadlineInputControl();
     titleInput.focus();
     formModal.open({ title: `新增子项目（上级 #${id}）` });
@@ -878,19 +909,21 @@ itemsBody?.addEventListener("click", async (event) => {
 
     try {
       const updated = await patchStatus(id, status);
-      // Status transition rules:
       // - 开始：默认加入今日日程（若未设置执行日期）
-      // - 暂停：清空执行日期
+      // - 暂停（计划中）：保留当前计划执行日期
       if (status === "1") {
         const hasDate = String(updated?.planned_execute_date || "").trim();
         if (!hasDate) {
           await patchSchedule(id, yyyyMmDd(new Date()));
         }
-      } else if (status === "0") {
-        await patchSchedule(id, "");
       }
     } catch (e) {
-      alert(String(e?.message || e || "Update status failed."));
+      const msg = String(e?.message || e || "Update status failed.");
+      const hint =
+        msg.includes("进行中项目数量已达上限") || msg.includes("上限")
+          ? "\n\n可将部分「进行中」项目改为「计划中」后再试。"
+          : "";
+      alert(msg + hint);
       return;
     }
     invalidateAllItemsCache();
@@ -921,13 +954,14 @@ itemsBody?.addEventListener("click", async (event) => {
     titleInput.value = item.title || "";
     detailInput.value = item.detail || "";
     urgencyLevelSelect.value = String(item.urgency_level ?? "0");
-    projectStatusSelect.value = String(item.project_status ?? "0");
+    projectStatusSelect.value = String(item.project_status ?? "3");
     if (projectCategorySelect) projectCategorySelect.value = String(item.project_category ?? "2");
     if (economicBenefitSelect) economicBenefitSelect.value = String(item.economic_benefit_expectation ?? "4");
     setFormParentById(item.parent_ids || "");
     childIdsInput.value = item.child_ids || "";
     prerequisiteIdsInput.value = item.prerequisite_ids || "";
     deadlineValueInput.value = item.deadline_value || "";
+    if (plannedTimeInput) plannedTimeInput.value = String(item.planned_time || "").trim();
     syncDeadlineInputControl();
     if (formTitle) formTitle.textContent = `Edit Item #${id}`;
     submitBtn.textContent = "Save";
@@ -1178,6 +1212,7 @@ newItemBtn?.addEventListener("click", () => {
 newInspireBtn?.addEventListener("click", () => {
   resetForm();
   if (projectCategorySelect) projectCategorySelect.value = "3";
+  projectStatusSelect.value = "0";
   const pid = itemsRootIdInput ? itemsRootIdInput.value.trim() : "";
   formModal.open({
     title: "新增灵感项目",
@@ -1214,13 +1249,14 @@ prereqChoiceCreateNewBtn?.addEventListener("click", async () => {
   titleInput.value = "";
   detailInput.value = "";
   urgencyLevelSelect.value = "0";
-  projectStatusSelect.value = "1";
+  projectStatusSelect.value = "3";
   if (projectCategorySelect) projectCategorySelect.value = "2";
   if (economicBenefitSelect) economicBenefitSelect.value = "4";
   setFormParentById(defaultParentId);
   childIdsInput.value = "";
   prerequisiteIdsInput.value = "";
   deadlineValueInput.value = "";
+  if (plannedTimeInput) plannedTimeInput.value = "";
   syncDeadlineInputControl();
   titleInput.focus();
   formModal.open({ title: `新建前置项目（关联到 #${targetId}）` });
@@ -1257,6 +1293,73 @@ dailyItemsBody?.addEventListener("click", async (e) => {
   if (action === "daily-reschedule") {
     const defaultDate = String(dailyDateInput?.value || "").trim() || yyyyMmDd(new Date());
     openScheduleModal(id, { defaultDate });
+    return;
+  }
+
+  if (action === "daily-pause") {
+    try {
+      await patchStatus(id, "3");
+    } catch (e) {
+      const msg = String(e?.message || e || "暂停失败");
+      const hint =
+        msg.includes("进行中项目数量已达上限") || msg.includes("上限")
+          ? "\n\n可将部分「进行中」项目改为「计划中」后再试。"
+          : "";
+      alert(msg + hint);
+      return;
+    }
+    invalidateAllItemsCache();
+    await loadItems();
+    await loadTopPriorityItems();
+    await loadDailyItems();
+    return;
+  }
+
+  if (action === "daily-start") {
+    const byId = await getAllItemsCached();
+    const item = byId.get(String(id));
+    if (!item) return;
+    if (String(item.project_status ?? "0") === "4") {
+      const blockedBy = String(item.blocked_by_ids ?? "").trim();
+      const msg = blockedBy
+        ? `该项目处于阻塞状态，当前被以下前置项目阻塞：${blockedBy}。请先完成前置项目。`
+        : "该项目处于阻塞状态，请先完成前置项目。";
+      alert(msg);
+      return;
+    }
+    try {
+      const updated = await patchStatus(id, "1");
+      const hasDate = String(updated?.planned_execute_date || "").trim();
+      if (!hasDate) {
+        await patchSchedule(id, yyyyMmDd(new Date()));
+      }
+    } catch (e) {
+      const msg = String(e?.message || e || "开始失败");
+      const hint =
+        msg.includes("进行中项目数量已达上限") || msg.includes("上限")
+          ? "\n\n可将部分「进行中」项目改为「计划中」后再试。"
+          : "";
+      alert(msg + hint);
+      return;
+    }
+    invalidateAllItemsCache();
+    await loadItems();
+    await loadTopPriorityItems();
+    await loadDailyItems();
+    return;
+  }
+
+  if (action === "daily-undo-complete") {
+    try {
+      await patchStatus(id, "3");
+    } catch (e) {
+      alert(String(e?.message || e || "撤销完成失败"));
+      return;
+    }
+    invalidateAllItemsCache();
+    await loadItems();
+    await loadTopPriorityItems();
+    await loadDailyItems();
     return;
   }
 
@@ -1302,6 +1405,28 @@ scheduleSaveBtn?.addEventListener("click", async () => {
     await patchSchedule(targetId, date);
   } catch (e) {
     if (scheduleMessage) scheduleMessage.textContent = String(e?.message || e || "保存失败");
+    return;
+  }
+  invalidateAllItemsCache();
+  await loadItems();
+  await loadTopPriorityItems();
+  await loadDailyItems();
+  closeScheduleModal();
+});
+
+schedulePauseBtn?.addEventListener("click", async () => {
+  const targetId = scheduleState.targetId;
+  if (!targetId) return;
+  try {
+    await patchStatus(targetId, "3");
+  } catch (e) {
+    const msg = String(e?.message || e || "暂停失败");
+    const hint =
+      msg.includes("进行中项目数量已达上限") || msg.includes("上限")
+        ? "\n\n可将部分「进行中」项目改为「计划中」后再试。"
+        : "";
+    if (scheduleMessage) scheduleMessage.textContent = msg + hint;
+    else alert(msg + hint);
     return;
   }
   invalidateAllItemsCache();

@@ -223,6 +223,8 @@ tbody tr.locate-highlight {
 .badge.status-0::before { background: rgba(148, 163, 184, 0.95); }
 .badge.status-1 { border-color: rgba(91, 140, 255, 0.45); background: rgba(91, 140, 255, 0.16); }
 .badge.status-1::before { background: rgba(91, 140, 255, 0.95); }
+.badge.status-3 { border-color: rgba(168, 85, 247, 0.45); background: rgba(168, 85, 247, 0.14); }
+.badge.status-3::before { background: rgba(168, 85, 247, 0.95); }
 .badge.status-2 { border-color: rgba(34, 197, 94, 0.45); background: rgba(34, 197, 94, 0.14); }
 .badge.status-2::before { background: rgba(34, 197, 94, 0.95); }
 .badge.status-4 { border-color: rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.14); }

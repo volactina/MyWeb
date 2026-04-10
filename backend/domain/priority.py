@@ -23,13 +23,14 @@ def _parse_ts(ts: str) -> int:
 def compute_priority(items: List[Dict[str, str]]) -> None:
     # Derived priority (higher first). Stored as string for CSV compatibility.
     # Same-field ordering (higher first):
-    # - 项目状态：进行中 > 待开始 > 阻塞 > 已完成/中止
+    # - 项目状态：进行中 > 计划中 > 待开始 > 阻塞 > 已完成/中止
     # - 项目分类：执行项目 > 待定 > 管理项目 > 灵感项目
     #
     # Weight dominance (most significant to least):
     # 项目分类 > 时间紧急程度 > 项目经济效益预期 > 项目状态 > updated_at
     status_weight = {
         "1": 300,  # 进行中
+        "3": 250,  # 计划中
         "0": 200,  # 待开始
         "4": 100,  # 阻塞
         "2": 0,    # 已完成

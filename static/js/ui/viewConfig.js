@@ -10,6 +10,7 @@ export const VIEW_CONFIG = {
     { key: "project_category", label: "项目分类" },
     { key: "economic_benefit_expectation", label: "项目经济效益预期" },
     { key: "planned_execute_date", label: "计划执行日期" },
+    { key: "planned_time", label: "计划时间" },
     { key: "blocked_by_ids", label: "待完成前置项目" },
     { key: "prerequisite_ids", label: "前置项目列表" },
     { key: "urgency_level", label: "时间紧急程度" },

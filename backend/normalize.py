@@ -26,6 +26,7 @@ CSV_HEADERS = [
     "project_category",
     "economic_benefit_expectation",
     "planned_execute_date",
+    "planned_time",
     "priority",
     "parent_ids",
     "child_ids",
@@ -37,10 +38,11 @@ CSV_HEADERS = [
 
 DEFAULT_ITEM_FIELDS: Dict[str, str] = {
     "urgency_level": "0",
-    "project_status": "0",
+    "project_status": "3",
     "project_category": "2",
     "economic_benefit_expectation": "4",
     "planned_execute_date": "",
+    "planned_time": "",
     "priority": "0",
     "parent_ids": "",
     "child_ids": "",
@@ -86,21 +88,25 @@ def normalize_planned_execute_date(raw: str) -> str:
     return raw if _is_yyyy_mm_dd(raw) else ""
 
 
+def normalize_planned_time(raw: str) -> str:
+    raw = (str(raw) if raw is not None else "").strip()
+    if not raw:
+        return ""
+    return raw[:64]
+
+
 def normalize_project_status(raw: str) -> str:
     """
     Project status:
     0 待开始
     1 进行中
     2 已完成
+    3 计划中
     4 阻塞
     5 中止
-
-    Status 3(暂停) is deprecated and will be treated as 0(待开始).
     """
     raw = (raw or "").strip()
-    if raw == "3":
-        return "0"
-    return raw if raw in {"0", "1", "2", "4", "5"} else "0"
+    return raw if raw in {"0", "1", "2", "3", "4", "5"} else "3"
 
 
 def normalize_item(row: Dict[str, str]) -> Dict[str, str]:
@@ -108,7 +114,7 @@ def normalize_item(row: Dict[str, str]) -> Dict[str, str]:
     if normalized.get("urgency_level") is None or normalized["urgency_level"] == "":
         normalized["urgency_level"] = "0"
     if normalized.get("project_status") is None or normalized["project_status"] == "":
-        normalized["project_status"] = "0"
+        normalized["project_status"] = "3"
     normalized["project_status"] = normalize_project_status(normalized["project_status"])
     normalized["project_category"] = normalize_project_category(str(normalized.get("project_category", "")))
     normalized["economic_benefit_expectation"] = normalize_economic_benefit_expectation(
@@ -117,6 +123,7 @@ def normalize_item(row: Dict[str, str]) -> Dict[str, str]:
     normalized["planned_execute_date"] = normalize_planned_execute_date(
         str(normalized.get("planned_execute_date", ""))
     )
+    normalized["planned_time"] = normalize_planned_time(str(normalized.get("planned_time", "")))
     if normalized.get("parent_ids") is None:
         normalized["parent_ids"] = ""
     if normalized.get("child_ids") is None:

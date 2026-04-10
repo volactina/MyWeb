@@ -69,11 +69,13 @@ export async function patchParent(id, parentIdOrEmpty) {
   });
 }
 
-export async function patchSchedule(id, plannedExecuteDateOrEmpty) {
+export async function patchSchedule(id, plannedExecuteDateOrEmpty, options = {}) {
+  const body = { planned_execute_date: plannedExecuteDateOrEmpty };
+  if (options.keepStatus) body.keep_status = true;
   return await fetchJson(`/api/items/${encodeURIComponent(id)}/schedule`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ planned_execute_date: plannedExecuteDateOrEmpty }),
+    body: JSON.stringify(body),
   });
 }
 

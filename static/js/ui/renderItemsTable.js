@@ -39,12 +39,21 @@ export function renderItemsTable({ itemsBody, items, viewConfig, locatedItemId =
           <button type="button" data-action="add-child" data-id="${item.id}">Add Child</button>
           <button type="button" data-action="add-prereq" data-id="${item.id}">Add Prereq</button>
           <button type="button" data-action="add-schedule" data-id="${item.id}">加入日程</button>
+          ${(() => {
+            const st = String(item.project_status ?? "0");
+            if (st === "1") {
+              return `<button type="button" data-action="set-status" data-id="${item.id}" data-status="3">暂停</button>`;
+            }
+            if (st === "2") {
+              return `<button type="button" data-action="set-status" data-id="${item.id}" data-status="3">撤销完成</button>`;
+            }
+            return `<button type="button" data-action="set-status" data-id="${item.id}" data-status="1">开始</button>`;
+          })()}
           ${
-            String(item.project_status ?? "0") === "1"
-              ? `<button type="button" data-action="set-status" data-id="${item.id}" data-status="0">暂停</button>`
-              : `<button type="button" data-action="set-status" data-id="${item.id}" data-status="1">开始</button>`
+            String(item.project_status ?? "0") === "2"
+              ? ""
+              : `<button type="button" data-action="set-status" data-id="${item.id}" data-status="2">完成</button>`
           }
-          <button type="button" data-action="set-status" data-id="${item.id}" data-status="2">完成</button>
           ${
             String(item.project_status ?? "0") === "4"
               ? ""

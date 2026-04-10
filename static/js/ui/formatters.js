@@ -31,11 +31,17 @@ export function formatDeadline(item) {
   return v || "未填写";
 }
 
+export function formatPlannedTime(item) {
+  const v = String(item?.planned_time ?? "").trim();
+  return v || "—";
+}
+
 export function formatValue(key, item) {
   if (key === "deadline_value") return formatDeadline(item);
   if (key === "economic_benefit_expectation") return formatEconomicBenefitExpectation(item);
   if (key === "project_category") return formatProjectCategory(item);
   if (key === "planned_execute_date") return String(item?.planned_execute_date ?? "").trim() || "—";
+  if (key === "planned_time") return formatPlannedTime(item);
   return item?.[key] ?? "";
 }
 

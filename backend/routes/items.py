@@ -1,21 +1,57 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict
+from typing import Dict, Optional
 
 from flask import Blueprint, jsonify, request
 
 from ..http.validators import bad_request, not_found, parse_int_str, parse_statuses_csv
+from ..limits import can_transition_to_in_progress, in_progress_limit_message
 from ..normalize import (
     current_timestamp,
     normalize_economic_benefit_expectation,
     normalize_planned_execute_date,
+    normalize_planned_time,
     normalize_project_category,
     normalize_project_status,
     parse_id_list,
 )
 from ..service_items import next_id, read_items, subtree_ids, write_items
 from ..services.item_queries import apply_filters, sort_by_priority
+
+
+def _default_planned_execute_date_if_needed(project_status: str, planned_execute_date: str) -> str:
+    """进行中、计划中若未指定计划执行日，则默认为今天。"""
+    ped = (planned_execute_date or "").strip()
+    if project_status in {"1", "3"} and not ped:
+        return datetime.now().strftime("%Y-%m-%d")
+    return planned_execute_date
+
+
+def _today_iso() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _is_strictly_before_today(date_str: str) -> bool:
+    s = (date_str or "").strip()
+    if len(s) != 10:
+        return False
+    try:
+        d = datetime.strptime(s, "%Y-%m-%d").date()
+    except ValueError:
+        return False
+    return d < datetime.now().date()
+
+
+def _reject_past_schedule_for_incomplete(project_status: str, planned_execute_date: str) -> Optional[str]:
+    """未完成（非已完成）不可将计划执行日改到过去。"""
+    if str(project_status) == "2":
+        return None
+    if not (planned_execute_date or "").strip():
+        return None
+    if _is_strictly_before_today(planned_execute_date):
+        return "不可以将未完成的项目改期到过去"
+    return None
 
 
 def register_item_routes(bp: Blueprint) -> None:
@@ -66,7 +102,7 @@ def register_item_routes(bp: Blueprint) -> None:
         detail = (payload.get("detail") or "").strip()
         urgency_level = str(payload.get("urgency_level") if payload.get("urgency_level") is not None else "0").strip()
         project_status = normalize_project_status(
-            str(payload.get("project_status") if payload.get("project_status") is not None else "1")
+            str(payload.get("project_status") if payload.get("project_status") is not None else "3")
         )
         project_category = normalize_project_category(
             str(payload.get("project_category")) if payload.get("project_category") is not None else ""
@@ -83,13 +119,23 @@ def register_item_routes(bp: Blueprint) -> None:
         planned_execute_date = normalize_planned_execute_date(
             str(payload.get("planned_execute_date")) if payload.get("planned_execute_date") is not None else ""
         )
-        if project_status == "1" and not planned_execute_date:
-            planned_execute_date = datetime.now().strftime("%Y-%m-%d")
+        planned_time = normalize_planned_time(
+            str(payload.get("planned_time")) if payload.get("planned_time") is not None else ""
+        )
+        past_err = _reject_past_schedule_for_incomplete(project_status, planned_execute_date)
+        if past_err:
+            return bad_request(past_err)
+        planned_execute_date = _default_planned_execute_date_if_needed(project_status, planned_execute_date)
 
         if not title:
             return bad_request("title is required")
 
         items = read_items()
+        if project_status == "1" and not can_transition_to_in_progress(
+            items, item_id=None, previous_status=""
+        ):
+            return bad_request(in_progress_limit_message())
+
         now = current_timestamp()
         new_item = {
             "id": str(next_id(items)),
@@ -102,6 +148,7 @@ def register_item_routes(bp: Blueprint) -> None:
             "project_category": project_category,
             "economic_benefit_expectation": economic_benefit_expectation,
             "planned_execute_date": planned_execute_date,
+            "planned_time": planned_time,
             "parent_ids": parent_ids,
             "child_ids": child_ids,
             "prerequisite_ids": prerequisite_ids,
@@ -123,9 +170,6 @@ def register_item_routes(bp: Blueprint) -> None:
         title = (payload.get("title") or "").strip()
         detail = (payload.get("detail") or "").strip()
         urgency_level = str(payload.get("urgency_level") if payload.get("urgency_level") is not None else "0").strip()
-        project_status = normalize_project_status(
-            str(payload.get("project_status") if payload.get("project_status") is not None else "0")
-        )
         parent_ids = (payload.get("parent_ids") or "").strip()
         child_ids = (payload.get("child_ids") or "").strip()
         prerequisite_ids = (payload.get("prerequisite_ids") or "").strip()
@@ -143,6 +187,13 @@ def register_item_routes(bp: Blueprint) -> None:
 
         if target is None:
             return not_found("item not found")
+
+        old_status = str(target.get("project_status", "0"))
+        project_status = normalize_project_status(
+            str(payload.get("project_status"))
+            if payload.get("project_status") is not None
+            else str(target.get("project_status", "3"))
+        )
 
         if payload.get("project_category") is not None:
             project_category = normalize_project_category(str(payload.get("project_category")))
@@ -163,6 +214,23 @@ def register_item_routes(bp: Blueprint) -> None:
         else:
             planned_execute_date = normalize_planned_execute_date(str(target.get("planned_execute_date", "")))
 
+        if payload.get("planned_time") is not None:
+            planned_time = normalize_planned_time(str(payload.get("planned_time")))
+        else:
+            planned_time = normalize_planned_time(str(target.get("planned_time", "")))
+
+        past_err = _reject_past_schedule_for_incomplete(project_status, planned_execute_date)
+        if past_err:
+            return bad_request(past_err)
+        planned_execute_date = _default_planned_execute_date_if_needed(project_status, planned_execute_date)
+
+        if project_status == "1" and planned_execute_date and planned_execute_date != _today_iso():
+            project_status = "3"
+
+        if project_status == "1" and old_status != "1":
+            if not can_transition_to_in_progress(items, item_id=item_id, previous_status=old_status):
+                return bad_request(in_progress_limit_message())
+
         target["title"] = title
         target["detail"] = detail
         target["urgency_level"] = urgency_level if urgency_level in {"0", "1", "2", "3", "4"} else "0"
@@ -170,6 +238,7 @@ def register_item_routes(bp: Blueprint) -> None:
         target["project_category"] = project_category
         target["economic_benefit_expectation"] = economic_benefit_expectation
         target["planned_execute_date"] = planned_execute_date
+        target["planned_time"] = planned_time
         target["parent_ids"] = parent_ids
         target["child_ids"] = child_ids
         target["prerequisite_ids"] = prerequisite_ids
@@ -188,7 +257,7 @@ def register_item_routes(bp: Blueprint) -> None:
         project_status = normalize_project_status(
             str(payload.get("project_status") if payload.get("project_status") is not None else "")
         )
-        if project_status not in {"0", "1", "2", "4", "5"}:
+        if project_status not in {"0", "1", "2", "3", "4", "5"}:
             return bad_request("invalid project_status")
 
         items = read_items()
@@ -201,7 +270,15 @@ def register_item_routes(bp: Blueprint) -> None:
         if target is None:
             return not_found("item not found")
 
+        old_status = str(target.get("project_status", "0"))
+        if project_status == "1" and old_status != "1":
+            if not can_transition_to_in_progress(items, item_id=item_id, previous_status=old_status):
+                return bad_request(in_progress_limit_message())
+
         target["project_status"] = project_status
+        ped = normalize_planned_execute_date(str(target.get("planned_execute_date", "")))
+        if project_status in {"1", "3"} and not ped:
+            target["planned_execute_date"] = datetime.now().strftime("%Y-%m-%d")
         target["updated_at"] = current_timestamp()
         try:
             write_items(items)
@@ -293,6 +370,7 @@ def register_item_routes(bp: Blueprint) -> None:
         planned_execute_date = normalize_planned_execute_date(
             str(payload.get("planned_execute_date")) if payload.get("planned_execute_date") is not None else ""
         )
+        keep_status = payload.get("keep_status") in (True, "1", "true", "True", "yes", "YES")
 
         items = read_items()
         target = None
@@ -306,12 +384,22 @@ def register_item_routes(bp: Blueprint) -> None:
         if not planned_execute_date and str(target.get("project_status", "0")) == "2":
             return bad_request("无法清空已完成项目")
 
+        st = str(target.get("project_status", "0"))
+        past_err = _reject_past_schedule_for_incomplete(st, planned_execute_date)
+        if past_err:
+            return bad_request(past_err)
+
         target["planned_execute_date"] = planned_execute_date
-        # If a project is scheduled, treat it as "in progress" (unless it's blocked).
-        if planned_execute_date and str(target.get("project_status", "0")) != "4":
-            target["project_status"] = "1"
-        # If schedule is cleared, treat it as pending (unless it's blocked).
-        if not planned_execute_date and str(target.get("project_status", "0")) != "4":
+        today = _today_iso()
+        if planned_execute_date:
+            if keep_status or st == "4":
+                pass
+            elif st == "1":
+                if planned_execute_date != today:
+                    target["project_status"] = "3"
+            else:
+                target["project_status"] = "3"
+        elif st != "4":
             target["project_status"] = "0"
         target["updated_at"] = current_timestamp()
         try:
