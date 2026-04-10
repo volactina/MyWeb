@@ -63,9 +63,10 @@ def normalize_project_category(raw: str) -> str:
     1 管理项目
     2 执行项目（缺省）
     3 灵感项目
+    4 目标（主线）
     """
     raw = (raw or "").strip()
-    return raw if raw in {"0", "1", "2", "3"} else "2"
+    return raw if raw in {"0", "1", "2", "3", "4"} else "2"
 
 
 def normalize_economic_benefit_expectation(raw: str) -> str:

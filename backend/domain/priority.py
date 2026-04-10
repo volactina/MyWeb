@@ -24,7 +24,7 @@ def compute_priority(items: List[Dict[str, str]]) -> None:
     # Derived priority (higher first). Stored as string for CSV compatibility.
     # Same-field ordering (higher first):
     # - 项目状态：进行中 > 计划中 > 待开始 > 阻塞 > 已完成/中止
-    # - 项目分类：执行项目 > 待定 > 管理项目 > 灵感项目
+    # - 项目分类：执行项目 > 目标（主线）> 待定 > 管理项目 > 灵感项目
     #
     # Weight dominance (most significant to least):
     # 项目分类 > 时间紧急程度 > 项目经济效益预期 > 项目状态 > updated_at
@@ -46,6 +46,7 @@ def compute_priority(items: List[Dict[str, str]]) -> None:
     }
     category_weight = {
         "2": 300,  # 执行项目
+        "4": 250,  # 目标（主线）
         "0": 200,  # 待定
         "1": 100,  # 管理项目
         "3": 0,    # 灵感项目
@@ -68,5 +69,9 @@ def compute_priority(items: List[Dict[str, str]]) -> None:
             + status_weight.get(st, 0) * 10_000
             + updated_epoch
         )
+        # Hard rule: completed/cancelled must always rank below any unfinished item.
+        # We enforce this by putting them in a strictly lower priority band.
+        if st in {"2", "5"}:
+            score -= 10_000_000_000_000_000
         item["priority"] = str(score)
 

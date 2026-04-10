@@ -3,6 +3,7 @@ from pathlib import Path
 from flask import Flask
 
 from .routes import bp as api_bp
+from .backup import start_backup_thread
 
 
 def create_app() -> Flask:
@@ -14,5 +15,6 @@ def create_app() -> Flask:
         static_url_path="/static",
     )
     app.register_blueprint(api_bp)
+    start_backup_thread()
     return app
 

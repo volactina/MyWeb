@@ -8,14 +8,24 @@
       </div>
       <button type="button" id="move-modal-close">关闭</button>
     </div>
-    <div class="actions">
+    <div class="actions" id="move-modal-search-wrap" style="display:none;">
+      <input
+        id="move-modal-search"
+        placeholder="搜索标题/内容…"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+      />
+      <button type="button" id="move-modal-search-clear">清空</button>
+    </div>
+    <div class="actions" id="move-modal-toolbar">
       <button type="button" class="primary" id="move-modal-move-here">移动到此处</button>
       <button type="button" id="move-modal-move-root">移动到根目录</button>
     </div>
     <table class="folder-list">
       <thead>
         <tr>
-          <th>子项目</th>
+          <th id="move-modal-col-title">子项目</th>
           <th>操作</th>
         </tr>
       </thead>

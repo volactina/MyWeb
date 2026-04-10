@@ -1,0 +1,19 @@
+<div id="goal-new-choice-backdrop" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal" style="width: min(520px, 100%);">
+    <div class="modal-header">
+      <div>
+        <h3 class="modal-title" id="goal-new-choice-title">新建目标</h3>
+        <div class="muted" id="goal-new-choice-sub">请选择方式</div>
+      </div>
+      <button type="button" id="goal-new-choice-close">关闭</button>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary" id="goal-new-choice-create">创建新项目</button>
+      <button type="button" id="goal-new-choice-link">关联已有项目</button>
+      <button type="button" class="danger" id="goal-new-choice-cancel">取消</button>
+    </div>
+    <div class="muted" style="margin-top:10px;" id="goal-new-choice-hint">
+      创建：新建「目标（主线）」。若 Items 当前打开的是<strong>管理项目</strong>目录，将默认把新目标挂到该管理项目下。关联：将<strong>非管理、非目标</strong>的已有项目标为目标并<strong>保留上级</strong>；<strong>管理项目不可</strong>改为目标，请在管理项目下新建目标子项。
+    </div>
+  </div>
+</div>

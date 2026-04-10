@@ -57,6 +57,7 @@ def _reject_past_schedule_for_incomplete(project_status: str, planned_execute_da
 def register_item_routes(bp: Blueprint) -> None:
     @bp.get("/api/items")
     def list_items():
+        text_query = request.args.get("q", "").strip().lower()
         title_query = request.args.get("title", "").strip().lower()
         detail_query = request.args.get("detail", "").strip().lower()
         root_id_raw = request.args.get("root_id", "").strip()
@@ -81,6 +82,7 @@ def register_item_routes(bp: Blueprint) -> None:
         try:
             items = apply_filters(
                 items,
+                text_query=text_query,
                 title_query=title_query,
                 detail_query=detail_query,
                 root_id=root_id,
@@ -188,6 +190,8 @@ def register_item_routes(bp: Blueprint) -> None:
         if target is None:
             return not_found("item not found")
 
+        old_category = normalize_project_category(str(target.get("project_category", "")))
+
         old_status = str(target.get("project_status", "0"))
         project_status = normalize_project_status(
             str(payload.get("project_status"))
@@ -198,7 +202,10 @@ def register_item_routes(bp: Blueprint) -> None:
         if payload.get("project_category") is not None:
             project_category = normalize_project_category(str(payload.get("project_category")))
         else:
-            project_category = normalize_project_category(str(target.get("project_category", "")))
+            project_category = old_category
+
+        if old_category == "1" and project_category == "4":
+            return bad_request("管理项目不可改为目标（主线），请在管理项目下新建目标子项")
 
         if payload.get("economic_benefit_expectation") is not None:
             economic_benefit_expectation = normalize_economic_benefit_expectation(

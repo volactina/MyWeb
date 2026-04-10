@@ -20,6 +20,7 @@
           <button type="button" id="switch-to-priority" class="primary">高优先级</button>
           <button type="button" id="switch-to-daily">日程</button>
           <button type="button" id="switch-to-filter">Filter</button>
+          <button type="button" id="switch-to-goal-line">目标主线</button>
         </div>
       </div>
 
@@ -65,11 +66,23 @@
           </div>
           <div>
             <label for="filter-title">Filter by Name/Title</label>
-            <input id="filter-title" placeholder="contains..." />
+            <input
+              id="filter-title"
+              placeholder="contains..."
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+            />
           </div>
           <div>
             <label for="filter-detail">Filter by Detail Content</label>
-            <input id="filter-detail" placeholder="contains..." />
+            <input
+              id="filter-detail"
+              placeholder="contains..."
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+            />
           </div>
           <div class="actions full">
             <button type="button" id="search-btn">Search</button>
@@ -107,6 +120,33 @@
           <tbody id="daily-items-body"></tbody>
         </table>
       </div>
+
+      <div id="goal-line-panel" style="display:none;">
+        <div class="actions goal-line-toolbar" style="margin-top:10px; flex-wrap:wrap; gap:10px;">
+          <label class="goal-line-select-wrap">
+            当前目标
+            <select id="goal-line-root-select" style="min-width:200px;"></select>
+          </label>
+          <button type="button" id="goal-line-toggle-all-btn">显示全部主线</button>
+          <button type="button" id="goal-line-new-btn">新建目标</button>
+          <button type="button" id="goal-line-refresh-btn">刷新</button>
+        </div>
+        <div id="goal-line-progress-wrap" class="goal-line-progress-wrap" style="display:none;">
+          <div id="goal-line-progress-text" class="goal-line-progress-text"></div>
+          <div class="goal-line-progress-bar" aria-hidden="true">
+            <div id="goal-line-progress-fill" class="goal-line-progress-fill"></div>
+          </div>
+          <p class="muted" id="goal-line-progress-hint" style="margin:6px 0 0;">
+            完成度含根节点与子树内全部项目；中止状态不计入分母。
+          </p>
+        </div>
+        <div id="goal-line-empty" class="goal-line-empty muted" style="display:none; margin-top:14px;">
+          暂无「目标（主线）」项目。可在<strong>管理项目</strong>下创建多个目标；也可用「新建目标」创建或关联已有项目（保留上级，仅改分类）。
+        </div>
+        <div id="goal-line-board-scroll" class="goal-line-board-scroll">
+          <div id="goal-line-board" class="goal-line-board"></div>
+        </div>
+      </div>
     </section>
 
     <section class="card">
@@ -114,13 +154,16 @@
         <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
           <h2 style="margin:0;">Items</h2>
           <span class="muted" id="items-dir-hint"></span>
+          <span class="muted" id="backup-status" style="margin-left:8px;"></span>
         </div>
         <div class="actions">
           <input type="hidden" id="items-root-id" />
           <label class="muted" style="display:flex; align-items:center; gap:8px;">
-            <input id="items-show-all" type="checkbox" />
+            <input id="items-show-all" type="checkbox" checked />
             显示全部
           </label>
+          <button type="button" id="backup-now-btn">立即备份</button>
+          <a class="button-like" id="export-csv-link" href="/api/data/export" download>导出CSV</a>
           <button type="button" id="filter-up-btn">返回上级</button>
           <button type="button" id="items-root-btn">根项目</button>
           <button type="button" id="new-inspire-btn">新增灵感</button>
@@ -140,5 +183,6 @@
   {% include "partials/modals/_detail.html" %}
   {% include "partials/modals/_move.html" %}
   {% include "partials/modals/_prereq_choice.html" %}
+  {% include "partials/modals/_goal_new_choice.html" %}
   {% include "partials/modals/_schedule.html" %}
 {% endblock %}

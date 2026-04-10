@@ -4,10 +4,11 @@ from typing import Dict, List
 
 from .domain_graph import subtree_ids, validate_references_and_cycles
 from .domain.blocking import apply_prerequisite_blocking
+from .domain.deadlines import apply_prerequisite_deadline_constraints
 from .domain.enrich import normalize_and_collect_relations, sync_bidirectional_and_enforce_single_parent
 from .domain.paths import apply_paths
 from .domain.priority import compute_priority
-from .normalize import CSV_HEADERS
+from .normalize import CSV_HEADERS, normalize_project_category
 from .storage_csv import read_items_raw, write_items_raw
 
 
@@ -37,14 +38,18 @@ def enrich_and_normalize_items(items: List[Dict[str, str]]) -> List[Dict[str, st
     )
 
     # Auto-category rule: if a project has any child projects, treat it as a management project.
+    # Exception: 目标（主线）可带子分解仍保留分类 4。
     for item in items:
         if str(item.get("child_ids", "")).strip():
-            item["project_category"] = "1"
+            cat = normalize_project_category(str(item.get("project_category", "")))
+            if cat != "4":
+                item["project_category"] = "1"
 
     validate_references_and_cycles(items)
 
     by_id: Dict[int, Dict[str, str]] = {int(i["id"]): i for i in items}
     apply_prerequisite_blocking(items, raw_prereqs=raw_prereqs, by_id=by_id)
+    apply_prerequisite_deadline_constraints(items, raw_prereqs=raw_prereqs, by_id=by_id)
     apply_paths(items)
     compute_priority(items)
     return items

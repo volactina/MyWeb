@@ -23,6 +23,12 @@ def apply_prerequisite_blocking(
             item["blocked_by_ids"] = ";".join(str(i) for i in sorted(set(incomplete)))
         else:
             item["blocked_by_ids"] = ""
-            if prereqs:
+            if prereqs and str(item.get("project_status", "0")) == "4":
+                # Only auto-recover from "blocked" to "not started".
+                # Otherwise keep user's chosen status (e.g. planned/in-progress) stable.
+                item["project_status"] = "0"
+            elif not prereqs and str(item.get("project_status", "0")) == "4":
+                # If the last prerequisite edge is removed (e.g. "删除目标"),
+                # unblock the item as well.
                 item["project_status"] = "0"
 

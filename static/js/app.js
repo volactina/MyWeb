@@ -4,11 +4,49 @@ import { renderTableHead } from "./ui/renderTableHead.js";
 import { renderItemsTable } from "./ui/renderItemsTable.js";
 import { renderPriorityPanel } from "./ui/renderPriorityPanel.js";
 import { renderProjectStatusBadge } from "./ui/badges.js";
-import { formatValue } from "./ui/formatters.js";
+import { formatValue, formatProjectCategory } from "./ui/formatters.js";
 import { createFormModal } from "./ui/modals/formModal.js";
 import { createDetailModal } from "./ui/modals/detailModal.js";
 import { createItemsCache } from "./state/itemsCache.js";
 import { listItems, createItem, updateItem, deleteItem, patchStatus, patchParent, patchSchedule } from "./api/items.js";
+import {
+  GOAL_LINE_SELECTED_KEY,
+  getGoalRoots,
+  computeGoalProgress,
+  buildGoalLevels,
+  renderGoalLineBoardHtml,
+} from "./ui/goalLinePanel.js";
+
+function showFatalErrorBanner(err) {
+  try {
+    const msg = String(err?.stack || err?.message || err || "Unknown error");
+    const el = document.createElement("div");
+    el.style.position = "fixed";
+    el.style.left = "12px";
+    el.style.right = "12px";
+    el.style.bottom = "12px";
+    el.style.zIndex = "99999";
+    el.style.padding = "10px 12px";
+    el.style.borderRadius = "12px";
+    el.style.border = "1px solid rgba(255,77,79,0.55)";
+    el.style.background = "rgba(255,77,79,0.15)";
+    el.style.color = "rgba(255,255,255,0.92)";
+    el.style.fontSize = "12px";
+    el.style.whiteSpace = "pre-wrap";
+    el.textContent = `前端脚本异常（页面可能无法正常渲染）：\n${msg}`;
+    (document.body || document.documentElement).appendChild(el);
+  } catch {
+    // ignore
+  }
+}
+
+window.addEventListener("error", (e) => {
+  // Avoid infinite loops if banner code fails.
+  showFatalErrorBanner(e?.error || e?.message || "error");
+});
+window.addEventListener("unhandledrejection", (e) => {
+  showFatalErrorBanner(e?.reason || "unhandledrejection");
+});
 
 const form = document.getElementById("item-form");
 const formTitle = document.getElementById("form-title"); // legacy (removed from page)
@@ -59,9 +97,21 @@ const priorityItemsBody = document.getElementById("priority-items-body");
 const priorityPanel = document.getElementById("priority-panel");
 const dailyPanel = document.getElementById("daily-panel");
 const filterPanel = document.getElementById("filter-panel");
+const goalLinePanelEl = document.getElementById("goal-line-panel");
 const switchToPriorityBtn = document.getElementById("switch-to-priority");
 const switchToDailyBtn = document.getElementById("switch-to-daily");
 const switchToFilterBtn = document.getElementById("switch-to-filter");
+const switchToGoalLineBtn = document.getElementById("switch-to-goal-line");
+const goalLineRootSelect = document.getElementById("goal-line-root-select");
+const goalLineNewBtn = document.getElementById("goal-line-new-btn");
+const goalLineRefreshBtn = document.getElementById("goal-line-refresh-btn");
+const goalLineToggleAllBtn = document.getElementById("goal-line-toggle-all-btn");
+const goalLineProgressWrap = document.getElementById("goal-line-progress-wrap");
+const goalLineProgressText = document.getElementById("goal-line-progress-text");
+const goalLineProgressFill = document.getElementById("goal-line-progress-fill");
+const goalLineEmpty = document.getElementById("goal-line-empty");
+const goalLineBoardScroll = document.getElementById("goal-line-board-scroll");
+const goalLineBoard = document.getElementById("goal-line-board");
 const switcherTitle = document.getElementById("switcher-title");
 const switcherSub = document.getElementById("switcher-sub");
 
@@ -85,6 +135,8 @@ const scheduleMessage = document.getElementById("schedule-message");
 
 const itemsBody = document.getElementById("items-body");
 const itemsHeadRow = document.getElementById("items-head-row");
+const backupStatusEl = document.getElementById("backup-status");
+const backupNowBtn = document.getElementById("backup-now-btn");
 
 const detailModalBackdrop = document.getElementById("detail-modal-backdrop");
 const detailModalCloseBtn = document.getElementById("detail-modal-close");
@@ -101,6 +153,10 @@ const moveModalList = document.getElementById("move-modal-list");
 const moveModalMoveHereBtn = document.getElementById("move-modal-move-here");
 const moveModalMoveRootBtn = document.getElementById("move-modal-move-root");
 const moveModalHint = document.getElementById("move-modal-hint");
+const moveModalToolbar = document.getElementById("move-modal-toolbar");
+const moveModalSearchWrap = document.getElementById("move-modal-search-wrap");
+const moveModalSearchInput = document.getElementById("move-modal-search");
+const moveModalSearchClearBtn = document.getElementById("move-modal-search-clear");
 
 const prereqChoiceBackdrop = document.getElementById("prereq-choice-backdrop");
 const prereqChoiceCloseBtn = document.getElementById("prereq-choice-close");
@@ -109,6 +165,14 @@ const prereqChoiceLinkExistingBtn = document.getElementById("prereq-choice-link-
 const prereqChoiceCancelBtn = document.getElementById("prereq-choice-cancel");
 const prereqChoiceTitle = document.getElementById("prereq-choice-title");
 const prereqChoiceSub = document.getElementById("prereq-choice-sub");
+const prereqChoiceHint = document.getElementById("prereq-choice-hint");
+
+const goalNewChoiceBackdrop = document.getElementById("goal-new-choice-backdrop");
+const goalNewChoiceCloseBtn = document.getElementById("goal-new-choice-close");
+const goalNewChoiceCreateBtn = document.getElementById("goal-new-choice-create");
+const goalNewChoiceLinkBtn = document.getElementById("goal-new-choice-link");
+const goalNewChoiceCancelBtn = document.getElementById("goal-new-choice-cancel");
+const moveModalColTitle = document.getElementById("move-modal-col-title");
 
 let lastItemsById = new Map();
 let allItemsById = new Map();
@@ -120,12 +184,16 @@ function invalidateAllItemsCache() {
 }
 
 const pathPickerState = {
-  mode: "move", // "move" | "pick-parent" | "pick-prereq"
+  mode: "move", // "move" | "pick-parent" | "pick-prereq" | "goal-attach" | "goal-root-pick"
 };
 
 const moveState = {
   movingId: null, // string
   browseParentId: null, // string | null (null means root)
+};
+
+const moveModalSearchState = {
+  query: "",
 };
 
 const prereqState = {
@@ -137,8 +205,14 @@ const scheduleState = {
   targetId: null, // string | null
 };
 
-let topPanelMode = "priority"; // "priority" | "daily" | "filter"
+const goalAttachState = {
+  parentId: null, // string | null — 将所选项目挂到该父级下
+};
+
+let topPanelMode = "priority"; // "priority" | "daily" | "filter" | "goalLine"
 let locatedItemId = null;
+
+let goalLineShowAllRoots = false; // default: only unfinished roots in select
 
 const formModal = createFormModal({
   backdrop: formModalBackdrop,
@@ -184,8 +258,10 @@ function getFilterSearchParams() {
     const checked = statusFilterCheckboxes.filter((c) => c.checked).map((c) => c.value);
     if (checked.length > 0) params.set("statuses", checked.join(","));
   }
-  if (filterTitleInput.value.trim()) params.set("title", filterTitleInput.value.trim());
-  if (filterDetailInput.value.trim()) params.set("detail", filterDetailInput.value.trim());
+  const t = filterTitleInput.value.trim();
+  const d = filterDetailInput.value.trim();
+  const q = t || d;
+  if (q) params.set("q", q);
   return params;
 }
 
@@ -220,6 +296,28 @@ async function loadItems() {
   }
 }
 
+function fmtLocalFromUtcIso(iso) {
+  const s = String(iso || "").trim();
+  if (!s) return "";
+  const dt = new Date(s);
+  if (Number.isNaN(dt.getTime())) return s;
+  return dt.toLocaleString();
+}
+
+async function refreshBackupStatus() {
+  if (!backupStatusEl) return;
+  try {
+    const res = await fetch("/api/backup/status");
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data && data.error) || `HTTP ${res.status}`);
+    const at = fmtLocalFromUtcIso(data.last_backup_at_utc);
+    const kind = String(data.last_backup_kind || "");
+    backupStatusEl.textContent = at ? `上次备份：${at}${kind ? `（${kind}）` : ""}` : "上次备份：无";
+  } catch (e) {
+    backupStatusEl.textContent = `上次备份：获取失败`;
+  }
+}
+
 async function loadFilterResults() {
   if (!filterResultsBody) return;
   const params = getFilterSearchParams();
@@ -236,6 +334,7 @@ async function loadFilterResults() {
   const items = await listItems({
     all,
     rootId,
+    q: params.get("q") || "",
     title: params.get("title") || "",
     detail: params.get("detail") || "",
     statuses,
@@ -339,6 +438,15 @@ function addDays(yyyy, deltaDays) {
   return yyyyMmDd(dt);
 }
 
+function firstIdFromCsv(raw) {
+  const parts = String(raw || "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const first = parts[0] || "";
+  return /^\d+$/.test(first) ? first : "";
+}
+
 function isYmdBefore(a, b) {
   const aa = String(a || "").trim();
   const bb = String(b || "").trim();
@@ -367,8 +475,8 @@ async function runScheduleRolloverOncePerDay() {
     if (!d) return false;
     if (!isYmdBefore(d, today)) return false;
     const st = String(it?.project_status ?? "0");
-    // 今天以前的日程：计划中/进行中顺延一天，保留状态
-    return st === "1" || st === "3";
+    // 今天以前的日程：未完成（含阻塞 4、待开始 0）均顺延一天，保留状态
+    return st !== "2";
   });
 
   if (overdue.length > 0) {
@@ -414,7 +522,7 @@ async function loadDailyItems() {
       const badge = renderProjectStatusBadge(it);
       const st = String(it.project_status ?? "0");
       const pauseBtn =
-        st === "1"
+        st === "1" || st === "3"
           ? `<button type="button" data-action="daily-pause" data-id="${escapeHtml(id)}">暂停</button>`
           : "";
       const startBtn =
@@ -440,6 +548,175 @@ async function loadDailyItems() {
       `;
     })
     .join("");
+}
+
+async function loadGoalLinePanel() {
+  if (!goalLineBoard || !goalLineRootSelect) return;
+  const byId = await getAllItemsCached();
+  let roots = getGoalRoots(byId);
+  if (!goalLineShowAllRoots) {
+    // default: only show unfinished goal roots in dropdown
+    roots = roots.filter((r) => {
+      const st = String(r.project_status ?? "0");
+      return st !== "2" && st !== "5";
+    });
+  }
+  goalLineRootSelect.innerHTML = roots
+    .map((r) => {
+      const pid = String(r.parent_ids || "").trim();
+      const under = pid ? ` · 上级#${pid}` : " · 根目录";
+      const label = `${String(r.title || `#${r.id}`)}${under}`;
+      return `<option value="${escapeHtml(String(r.id))}">${escapeHtml(label)}</option>`;
+    })
+    .join("");
+
+  if (goalLineToggleAllBtn) {
+    goalLineToggleAllBtn.textContent = goalLineShowAllRoots ? "仅看未完成主线" : "显示全部主线";
+  }
+
+  if (roots.length === 0) {
+    if (goalLineEmpty) goalLineEmpty.style.display = "";
+    if (goalLineProgressWrap) goalLineProgressWrap.style.display = "none";
+    goalLineBoard.innerHTML = "";
+    try {
+      window.localStorage.removeItem(GOAL_LINE_SELECTED_KEY);
+    } catch {
+      // ignore
+    }
+    return;
+  }
+
+  if (goalLineEmpty) goalLineEmpty.style.display = "none";
+
+  let selected = "";
+  try {
+    selected = String(window.localStorage.getItem(GOAL_LINE_SELECTED_KEY) || "").trim();
+  } catch {
+    selected = "";
+  }
+  if (!selected || !roots.some((r) => String(r.id) === selected)) {
+    selected = String(roots[0].id);
+  }
+  goalLineRootSelect.value = selected;
+
+  const { done, total, pct } = computeGoalProgress(byId, selected);
+  if (goalLineProgressWrap) goalLineProgressWrap.style.display = "";
+  if (goalLineProgressText) {
+    goalLineProgressText.textContent = `完成度：${done} / ${total}（${pct}%）`;
+  }
+  if (goalLineProgressFill) {
+    goalLineProgressFill.style.width = `${pct}%`;
+  }
+
+  const levels = buildGoalLevels(byId, selected);
+  goalLineBoard.innerHTML = renderGoalLineBoardHtml(levels);
+  redrawGoalLineConnections({ itemsById: byId, rootId: selected });
+}
+
+function parseIdList(raw) {
+  return String(raw || "")
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function ensureGoalLineSvg(boardEl) {
+  let svg = boardEl.querySelector("svg.goal-line-lines");
+  if (!svg) {
+    svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.classList.add("goal-line-lines");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    boardEl.prepend(svg);
+  }
+  return svg;
+}
+
+function redrawGoalLineConnections({ itemsById, rootId }) {
+  if (!goalLineBoard || topPanelMode !== "goalLine") return;
+  const boardEl = goalLineBoard;
+  boardEl.style.position = "relative";
+
+  const svg = ensureGoalLineSvg(boardEl);
+  // Size to content box (board scrolls horizontally; svg should cover full board content).
+  const w = Math.max(1, boardEl.scrollWidth);
+  const h = Math.max(1, boardEl.scrollHeight);
+  svg.setAttribute("width", String(w));
+  svg.setAttribute("height", String(h));
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svg.innerHTML = "";
+
+  const nodeEls = Array.from(boardEl.querySelectorAll("[data-goal-node-id]"));
+  const rect0 = boardEl.getBoundingClientRect();
+  const byNodeId = new Map();
+  for (const el of nodeEls) {
+    const id = String(el.getAttribute("data-goal-node-id") || "").trim();
+    if (!id) continue;
+    byNodeId.set(id, el);
+  }
+
+  const stroke = "rgba(91, 140, 255, 0.55)";
+  const strokeThin = "rgba(255, 255, 255, 0.12)";
+
+  const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  const marker = document.createElementNS("http://www.w3.org/2000/svg", "marker");
+  marker.setAttribute("id", "arrow");
+  marker.setAttribute("markerWidth", "8");
+  marker.setAttribute("markerHeight", "8");
+  marker.setAttribute("refX", "7");
+  marker.setAttribute("refY", "4");
+  marker.setAttribute("orient", "auto");
+  const tip = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  tip.setAttribute("d", "M0,0 L8,4 L0,8 Z");
+  tip.setAttribute("fill", stroke);
+  marker.appendChild(tip);
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  // Build edges: from each visible node -> its prereqs that are also visible.
+  for (const [fromId, fromEl] of byNodeId) {
+    const item = itemsById.get(String(fromId));
+    if (!item) continue;
+    const prereqs = parseIdList(item.prerequisite_ids);
+    if (prereqs.length === 0) continue;
+    const fromRect = fromEl.getBoundingClientRect();
+    const x1 = fromRect.right - rect0.left;
+    const y1 = fromRect.top - rect0.top + fromRect.height / 2;
+
+    for (const toId of prereqs) {
+      const toEl = byNodeId.get(String(toId));
+      if (!toEl) continue;
+      const toRect = toEl.getBoundingClientRect();
+      const x2 = toRect.left - rect0.left;
+      const y2 = toRect.top - rect0.top + toRect.height / 2;
+
+      const dx = Math.max(40, Math.min(220, (x2 - x1) * 0.6));
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const d = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+      path.setAttribute("d", d);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", strokeThin);
+      path.setAttribute("stroke-width", "4");
+      path.setAttribute("stroke-linecap", "round");
+      path.setAttribute("opacity", "0.35");
+      svg.appendChild(path);
+
+      const path2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path2.setAttribute("d", d);
+      path2.setAttribute("fill", "none");
+      path2.setAttribute("stroke", stroke);
+      path2.setAttribute("stroke-width", "2");
+      path2.setAttribute("stroke-linecap", "round");
+      path2.setAttribute("marker-end", "url(#arrow)");
+      svg.appendChild(path2);
+    }
+  }
+}
+
+async function refreshSidePanels() {
+  await loadTopPriorityItems();
+  await loadDailyItems();
+  if (topPanelMode === "goalLine") await loadGoalLinePanel();
 }
 
 function openScheduleModal(targetId, { defaultDate } = {}) {
@@ -487,7 +764,23 @@ function closeMoveModal() {
   moveModalBackdrop.setAttribute("aria-hidden", "true");
   moveState.movingId = null;
   moveState.browseParentId = null;
+  goalAttachState.parentId = null;
   pathPickerState.mode = "move";
+  moveModalSearchState.query = "";
+  if (moveModalSearchInput) moveModalSearchInput.value = "";
+  if (moveModalToolbar) moveModalToolbar.style.display = "";
+}
+
+function openGoalAttachPicker(parentId) {
+  if (!moveModalBackdrop) return;
+  invalidateAllItemsCache();
+  pathPickerState.mode = "goal-attach";
+  goalAttachState.parentId = String(parentId);
+  moveState.movingId = null;
+  moveState.browseParentId = null;
+  moveModalBackdrop.style.display = "flex";
+  moveModalBackdrop.setAttribute("aria-hidden", "false");
+  loadAllItemsForMoveModal();
 }
 
 function openPrereqPicker(targetId) {
@@ -576,15 +869,273 @@ function getDescendantsOf(rootId) {
   return out;
 }
 
+function putPayloadForUpdateFromItem(item, overrides = {}) {
+  return {
+    title: String(item.title || "").trim(),
+    detail: String(item.detail || "").trim(),
+    urgency_level: String(item.urgency_level ?? "0"),
+    project_status: String(overrides.project_status ?? item.project_status ?? "3"),
+    project_category: String(overrides.project_category ?? item.project_category ?? "2"),
+    economic_benefit_expectation: String(item.economic_benefit_expectation ?? "4"),
+    planned_execute_date: String(item.planned_execute_date || "").trim(),
+    planned_time: String(item.planned_time || "").trim(),
+    parent_ids: String(item.parent_ids || "").trim(),
+    child_ids: String(item.child_ids || "").trim(),
+    prerequisite_ids: String(item.prerequisite_ids || "").trim(),
+    deadline_value: String(item.deadline_value || "").trim(),
+  };
+}
+
+function matchMoveModalQuery(item) {
+  const q = String(moveModalSearchState.query || "").trim().toLowerCase();
+  if (!q) return true;
+  const title = String(item?.title || "").toLowerCase();
+  const detail = String(item?.detail || "").toLowerCase();
+  return title.includes(q) || detail.includes(q);
+}
+
+async function promoteToGoalRoot(id) {
+  const byId = await getAllItemsCached();
+  const item = byId.get(String(id));
+  if (!item) {
+    alert("找不到该项目。");
+    return;
+  }
+  const wasCat = String(item.project_category ?? "2").trim();
+  if (wasCat === "1") {
+    alert(
+      "管理项目不可直接标为「目标（主线）」。请在该管理项目下使用「创建新项目」新增目标，或先将子项标为目标。"
+    );
+    return;
+  }
+  const titleHint = item.title || `#${id}`;
+  const pid = String(item.parent_ids || "").trim();
+  const parentHint = pid
+    ? `上级仍保留为 #${pid}${byId.get(pid)?.title ? `（${byId.get(pid).title}）` : ""}`
+    : "当前无上级（根目录）";
+  const msg =
+    wasCat === "4"
+      ? `「${titleHint}」已是目标（主线），仍将保存一次以刷新数据，确定？`
+      : `将「${titleHint}」标为「目标（主线）」（分类将设为 4）；${parentHint}。确定？`;
+  if (!confirm(msg)) return;
+
+  const payload = putPayloadForUpdateFromItem(item, { project_category: "4" });
+  try {
+    await updateItem(id, payload);
+  } catch (e) {
+    alert(String(e?.message || e || "更新失败"));
+    return;
+  }
+  closeMoveModal();
+  invalidateAllItemsCache();
+  await loadItems();
+  try {
+    window.localStorage.setItem(GOAL_LINE_SELECTED_KEY, String(id));
+  } catch {
+    // ignore
+  }
+  await refreshSidePanels();
+}
+
+function openGoalRootPickModal() {
+  if (!moveModalBackdrop) return;
+  invalidateAllItemsCache();
+  pathPickerState.mode = "goal-root-pick";
+  moveState.movingId = null;
+  moveState.browseParentId = null;
+  goalAttachState.parentId = null;
+  moveModalBackdrop.style.display = "flex";
+  moveModalBackdrop.setAttribute("aria-hidden", "false");
+  loadAllItemsForMoveModal();
+}
+
+function openGoalNewChoiceModal() {
+  if (!goalNewChoiceBackdrop) return;
+  goalNewChoiceBackdrop.style.display = "flex";
+  goalNewChoiceBackdrop.setAttribute("aria-hidden", "false");
+}
+
+function closeGoalNewChoiceModal() {
+  if (!goalNewChoiceBackdrop) return;
+  goalNewChoiceBackdrop.style.display = "none";
+  goalNewChoiceBackdrop.setAttribute("aria-hidden", "true");
+}
+
 function renderMoveModal() {
   if (!moveModalBackdrop) return;
-  const isPickParent = pathPickerState.mode === "pick-parent";
+  const isGoalAttach = pathPickerState.mode === "goal-attach";
+  const isGoalRootPick = pathPickerState.mode === "goal-root-pick";
   const isPickPrereq = pathPickerState.mode === "pick-prereq";
+  if (moveModalToolbar) moveModalToolbar.style.display = isGoalAttach || isGoalRootPick ? "none" : "";
+  if (moveModalSearchWrap) {
+    const showSearch = isGoalAttach || isGoalRootPick || isPickPrereq;
+    moveModalSearchWrap.style.display = showSearch ? "" : "none";
+  }
+  if (moveModalSearchInput) {
+    moveModalSearchInput.placeholder = isGoalRootPick
+      ? "搜索标题/内容，筛选可关联为目标的项目…"
+      : isPickPrereq
+        ? "搜索标题/内容，筛选当前目录…"
+        : "搜索标题/内容…";
+  }
+
+  if (isGoalAttach) {
+    const pid = goalAttachState.parentId;
+    if (!pid) {
+      if (moveModalTitle) moveModalTitle.textContent = "关联子目标";
+      if (moveModalSub) moveModalSub.textContent = "未指定父级。";
+      if (moveModalList) moveModalList.innerHTML = "";
+      return;
+    }
+    if (moveModalTitle) moveModalTitle.textContent = "关联已有项目为子目标";
+    if (moveModalSub) {
+      moveModalSub.textContent = `将所选项目挂到 #${pid} 下（将脱离原上级，单父约束）`;
+    }
+    if (moveModalCrumbs) moveModalCrumbs.innerHTML = "";
+
+    const forbidden = new Set();
+    let cur = String(pid).trim();
+    while (cur) {
+      forbidden.add(cur);
+      const it = allItemsById.get(cur);
+      if (!it) break;
+      cur = String(it.parent_ids || "").trim();
+    }
+
+    const candidates = Array.from(allItemsById.values())
+      .filter((x) => !forbidden.has(String(x.id)))
+      .filter(matchMoveModalQuery)
+      .sort((a, b) => Number(a.id) - Number(b.id));
+
+    if (moveModalList) {
+      moveModalList.innerHTML =
+        candidates.length === 0
+          ? `<tr><td colspan="2">（无可选项目）</td></tr>`
+          : candidates
+              .map(
+                (c) => `
+            <tr>
+              <td>${escapeHtml(String(c.title || ""))} <span class="muted">#${escapeHtml(String(c.id))}</span></td>
+              <td class="actions">
+                <button type="button" data-goal-attach-pick="${escapeHtml(String(c.id))}">挂到此目标下</button>
+              </td>
+            </tr>`
+              )
+              .join("");
+    }
+    if (moveModalHint) {
+      moveModalHint.textContent = "不可选当前节点及其上级（会形成循环）。其它项目将移动到该父级下。";
+    }
+    return;
+  }
+
+  if (isGoalRootPick) {
+    if (moveModalTitle) moveModalTitle.textContent = "关联为「目标（主线）」";
+    if (moveModalSub) {
+      moveModalSub.textContent =
+        "保留上级目录，仅将分类改为目标（主线）。管理项目不在此列表中，请在管理项目下「创建新项目」新增目标。";
+    }
+    if (moveModalCrumbs) moveModalCrumbs.innerHTML = "";
+    if (moveModalColTitle) moveModalColTitle.textContent = "项目";
+
+    const candidates = Array.from(allItemsById.values())
+      .filter((x) => {
+        const c = String(x.project_category ?? "2").trim();
+        return c !== "4" && c !== "1";
+      })
+      .filter(matchMoveModalQuery)
+      .sort((a, b) => Number(a.id) - Number(b.id));
+
+    if (moveModalList) {
+      moveModalList.innerHTML =
+        candidates.length === 0
+          ? `<tr><td colspan="2">（暂无可标为目标的项目：管理项目不可转换；已是目标的亦不在此列表。请用「创建新项目」在管理项目下新增目标。）</td></tr>`
+          : candidates
+              .map((c) => {
+                const cid = String(c.id);
+                const pp = String(c.parent_ids || "").trim();
+                const parentLine = pp
+                  ? `<br/><span class="muted" style="font-size:12px;">上级 #${escapeHtml(pp)}${
+                      allItemsById.get(pp)?.title
+                        ? ` ${escapeHtml(String(allItemsById.get(pp).title))}`
+                        : ""
+                    }</span>`
+                  : `<br/><span class="muted" style="font-size:12px;">上级：根目录</span>`;
+                return `
+            <tr>
+              <td>${escapeHtml(String(c.title || ""))} <span class="muted">#${escapeHtml(cid)}</span><br/><span class="muted" style="font-size:12px;">${escapeHtml(
+                  formatProjectCategory(c)
+                )}</span>${parentLine}</td>
+              <td class="actions">
+                <button type="button" data-goal-root-pick="${escapeHtml(cid)}">设为目标</button>
+              </td>
+            </tr>`;
+              })
+              .join("");
+    }
+    if (moveModalHint) {
+      moveModalHint.textContent =
+        "管理项目不可标为目标；目标（主线）不在此列表。将执行/待定等项目标为目标时保留其上级。";
+    }
+    return;
+  }
+
+  if (moveModalColTitle) moveModalColTitle.textContent = "子项目";
+
+  const isPickParent = pathPickerState.mode === "pick-parent";
   const moving = isPickParent || isPickPrereq ? null : allItemsById.get(String(moveState.movingId || ""));
   if (!isPickParent && !isPickPrereq && !moving) {
     if (moveModalTitle) moveModalTitle.textContent = "移动项目";
     if (moveModalSub) moveModalSub.textContent = "未找到要移动的项目，请刷新后重试。";
     if (moveModalList) moveModalList.innerHTML = "";
+    return;
+  }
+
+  const prereqSearchQ = isPickPrereq ? String(moveModalSearchState.query || "").trim() : "";
+  if (isPickPrereq && prereqSearchQ) {
+    if (moveModalTitle) moveModalTitle.textContent = "关联已有前置项目";
+    if (moveModalSub) moveModalSub.textContent = `全局搜索：${prereqSearchQ}（点击“选择”来关联）`;
+    if (moveModalCrumbs) moveModalCrumbs.innerHTML = "";
+    if (moveModalColTitle) moveModalColTitle.textContent = "项目";
+
+    const targetId = String(prereqState.targetId || "").trim();
+    const candidates = Array.from(allItemsById.values())
+      .filter(matchMoveModalQuery)
+      .sort((a, b) => Number(a.id) - Number(b.id));
+
+    if (moveModalList) {
+      moveModalList.innerHTML =
+        candidates.length === 0
+          ? `<tr><td colspan="2">（无匹配项目）</td></tr>`
+          : candidates
+              .map((c) => {
+                const cid = String(c.id);
+                const disabled = targetId && cid === targetId;
+                const pp = String(c.parent_ids || "").trim();
+                const parentLine = pp
+                  ? `<br/><span class="muted" style="font-size:12px;">上级 #${escapeHtml(pp)}</span>`
+                  : `<br/><span class="muted" style="font-size:12px;">上级：根目录</span>`;
+                return `
+            <tr>
+              <td>${escapeHtml(String(c.title || ""))} <span class="muted">#${escapeHtml(cid)}</span>${parentLine}${
+                disabled ? `<br/><span class="muted" style="font-size:12px;">（不可选：自己）</span>` : ""
+              }</td>
+              <td class="actions">
+                ${
+                  disabled
+                    ? ""
+                    : `<button type="button" data-testid="pick-prereq-${escapeHtml(cid)}" data-pick-prereq="${escapeHtml(
+                        cid
+                      )}">选择</button>`
+                }
+              </td>
+            </tr>`;
+              })
+              .join("");
+    }
+    if (moveModalHint) {
+      moveModalHint.textContent = "全局搜索会跨目录列出匹配项目；关联不会改变其项目路径。";
+    }
     return;
   }
 
@@ -625,16 +1176,18 @@ function renderMoveModal() {
     blockedSet.add(movingId);
   }
 
-  const children = getChildrenOf(moveState.browseParentId);
+  const children = getChildrenOf(moveState.browseParentId).filter(matchMoveModalQuery);
   if (moveModalList) {
     if (children.length === 0) {
-      moveModalList.innerHTML = `<tr><td colspan="2">（空）</td></tr>`;
+      moveModalList.innerHTML = `<tr><td colspan="2">（无匹配项目）</td></tr>`;
     } else {
       moveModalList.innerHTML = children
         .map((c) => {
           const cid = String(c.id);
           const disabled = blockedSet.has(cid);
-          const prereqBtn = isPickPrereq ? `<button type="button" data-pick-prereq="${escapeHtml(cid)}">选择</button>` : "";
+          const prereqBtn = isPickPrereq
+            ? `<button type="button" data-testid="pick-prereq-${escapeHtml(cid)}" data-pick-prereq="${escapeHtml(cid)}">选择</button>`
+            : "";
           return `
             <tr>
               <td>${escapeHtml(c.title || "")} <span class="muted">#${escapeHtml(cid)}</span>${
@@ -671,6 +1224,7 @@ async function moveProjectTo(parentIdOrEmpty) {
   }
   invalidateAllItemsCache();
   await loadItems();
+  await refreshSidePanels();
   closeMoveModal();
 }
 
@@ -763,6 +1317,7 @@ form?.addEventListener("submit", async (event) => {
         formMessage.textContent = msg;
       invalidateAllItemsCache();
       await loadItems();
+      await refreshSidePanels();
         resetForm();
         return;
       }
@@ -773,6 +1328,7 @@ form?.addEventListener("submit", async (event) => {
     resetForm();
     invalidateAllItemsCache();
     await loadItems();
+    await refreshSidePanels();
     formModal.close();
     return;
   }
@@ -781,6 +1337,7 @@ form?.addEventListener("submit", async (event) => {
   resetForm();
   invalidateAllItemsCache();
   await loadItems();
+  await refreshSidePanels();
   formModal.close();
 });
 
@@ -928,8 +1485,7 @@ itemsBody?.addEventListener("click", async (event) => {
     }
     invalidateAllItemsCache();
     await loadItems();
-    await loadTopPriorityItems();
-    await loadDailyItems();
+    await refreshSidePanels();
     return;
   }
 
@@ -943,6 +1499,7 @@ itemsBody?.addEventListener("click", async (event) => {
     }
     invalidateAllItemsCache();
     await loadItems();
+    await refreshSidePanels();
     return;
   }
 
@@ -982,6 +1539,7 @@ moveModalBackdrop?.addEventListener("click", (e) => {
 moveModalCrumbs?.addEventListener("click", (e) => {
   const t = e.target;
   if (!(t instanceof HTMLElement)) return;
+  if (pathPickerState.mode === "goal-root-pick") return;
   const crumb = t.getAttribute("data-crumb");
   if (!crumb) return;
   moveState.browseParentId = crumb === "root" ? null : crumb;
@@ -992,11 +1550,44 @@ moveModalList?.addEventListener("click", async (e) => {
   const t = e.target;
   if (!(t instanceof HTMLElement)) return;
 
+  const goalRootPick = t.getAttribute("data-goal-root-pick");
+  if (goalRootPick) {
+    await promoteToGoalRoot(goalRootPick);
+    return;
+  }
+
+  const goalAttachPick = t.getAttribute("data-goal-attach-pick");
+  if (goalAttachPick) {
+    const parentId = goalAttachState.parentId;
+    if (!parentId) return;
+    if (
+      !confirm(
+        `将项目 #${goalAttachPick} 的上级设为 #${parentId}？\n（将脱离原上级目录）`
+      )
+    ) {
+      return;
+    }
+    try {
+      await patchParent(goalAttachPick, parentId);
+    } catch (err) {
+      alert(String(err?.message || err || "关联失败"));
+      return;
+    }
+    closeMoveModal();
+    invalidateAllItemsCache();
+    await loadItems();
+    await refreshSidePanels();
+    return;
+  }
+
   const pickPrereq = t.getAttribute("data-pick-prereq");
   if (pickPrereq) {
     const targetId = prereqState.targetId;
     if (!targetId) return alert("缺少目标项目，请重试。");
     if (String(pickPrereq) === String(targetId)) return alert("不能选择自己作为前置项目。");
+
+    const byId = await getAllItemsCached();
+    const targetItem = byId.get(String(targetId));
 
     const res = await fetch(`/api/items/${encodeURIComponent(targetId)}/prerequisites`, {
       method: "PATCH",
@@ -1015,15 +1606,67 @@ moveModalList?.addEventListener("click", async (e) => {
       return;
     }
 
+    // 若在子目标(#targetId)下关联已有(#pickPrereq)，且其上游项目同时依赖了 targetId 与 pickPrereq，
+    // 则自动移除上游对 pickPrereq 的直接依赖，实现“把该目标移动到 targetId 下面”。
+    // 例：#57 的前置为 #108；新增子目标 #116（也为 #57 的前置）；在 #116 里关联已有 #108，
+    // 则自动把 #57 的前置从 {#116,#108} 简化为 {#116}，形成 #57 -> #116 -> #108。
+    try {
+      const tid = String(targetId);
+      const pid = String(pickPrereq);
+      const upstreams = Array.from(byId.values()).filter((it) => {
+        const prereqs = String(it?.prerequisite_ids || "")
+          .split(";")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        return String(it?.id) !== tid && prereqs.includes(tid) && prereqs.includes(pid);
+      });
+      for (const up of upstreams) {
+        const prereqs = String(up?.prerequisite_ids || "")
+          .split(";")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .filter((x) => x !== pid);
+        const next = Array.from(new Set(prereqs)).sort((a, b) => Number(a) - Number(b)).join(";");
+        const payload = putPayloadForUpdateFromItem(up);
+        payload.prerequisite_ids = next;
+        await updateItem(String(up.id), payload);
+      }
+    } catch (e3) {
+      // 不阻断主流程：关联已成功，简化依赖失败只提示
+      alert(String(e3?.message || e3 || "已关联前置项目，但同步调整上游依赖失败"));
+    }
+
+    // 若目标处于阻塞（或已有阻塞来源），自动把该前置项目标为“子目标”（分类=4），但不改变其路径
+    if (targetItem) {
+      const isGoal = String(targetItem.project_category ?? "2").trim() === "4";
+      const isBlocked = String(targetItem.project_status ?? "0") === "4" || String(targetItem.blocked_by_ids || "").trim();
+      if (isGoal && isBlocked) {
+        const prereqItem = byId.get(String(pickPrereq));
+        if (prereqItem) {
+          const wasCat = String(prereqItem.project_category ?? "2").trim();
+          if (wasCat !== "4") {
+            try {
+              const payload = putPayloadForUpdateFromItem(prereqItem, { project_category: "4" });
+              await updateItem(String(pickPrereq), payload);
+            } catch (err) {
+              alert(String(err?.message || err || "已关联前置项目，但自动设为子目标失败"));
+            }
+          }
+        }
+      }
+    }
+
     // Close first so the backdrop won't block next interactions.
     closeMoveModal();
     invalidateAllItemsCache();
     await loadItems();
+    await refreshSidePanels();
     return;
   }
 
   const enter = t.getAttribute("data-move-enter");
   if (!enter) return;
+  if (pathPickerState.mode === "goal-attach" || pathPickerState.mode === "goal-root-pick") return;
   if (pathPickerState.mode === "move") {
     const moving = allItemsById.get(String(moveState.movingId || ""));
     const blocked = moving ? getDescendantsOf(String(moving.id)) : new Set();
@@ -1035,6 +1678,7 @@ moveModalList?.addEventListener("click", async (e) => {
 });
 
 moveModalMoveHereBtn?.addEventListener("click", () => {
+  if (pathPickerState.mode === "goal-attach" || pathPickerState.mode === "goal-root-pick") return;
   if (pathPickerState.mode === "pick-parent") return pickParentHere();
   if (pathPickerState.mode === "pick-prereq") return alert("请在列表里点击“选择”来关联该项目为前置项目。");
 
@@ -1049,6 +1693,7 @@ moveModalMoveHereBtn?.addEventListener("click", () => {
 });
 
 moveModalMoveRootBtn?.addEventListener("click", () => {
+  if (pathPickerState.mode === "goal-attach" || pathPickerState.mode === "goal-root-pick") return;
   if (pathPickerState.mode === "pick-parent") {
     setFormParentById("");
     closeMoveModal();
@@ -1061,10 +1706,22 @@ moveModalMoveRootBtn?.addEventListener("click", () => {
   moveProjectTo("");
 });
 
+moveModalSearchInput?.addEventListener("input", () => {
+  moveModalSearchState.query = String(moveModalSearchInput.value || "");
+  renderMoveModal();
+});
+
+moveModalSearchClearBtn?.addEventListener("click", () => {
+  moveModalSearchState.query = "";
+  if (moveModalSearchInput) moveModalSearchInput.value = "";
+  renderMoveModal();
+});
+
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   detailModal.close();
   closeMoveModal();
+  closeGoalNewChoiceModal();
   formModal.close();
   closeScheduleModal();
 });
@@ -1075,6 +1732,10 @@ function openPrereqChoiceModal(targetId) {
   const item = lastItemsById.get(String(targetId));
   if (prereqChoiceTitle) prereqChoiceTitle.textContent = item?.title ? `添加前置项目：${item.title}` : "添加前置项目";
   if (prereqChoiceSub) prereqChoiceSub.textContent = `目标项目 #${String(targetId)}`;
+  if (prereqChoiceHint) {
+    prereqChoiceHint.textContent =
+      "新建：创建一个新项目，并自动设置为当前项目的前置项目（不会改变已有项目路径）。关联：从已有项目中选择一个作为前置项目（不会改变其项目路径）。";
+  }
   prereqChoiceBackdrop.style.display = "flex";
   prereqChoiceBackdrop.setAttribute("aria-hidden", "false");
 }
@@ -1085,40 +1746,78 @@ function closePrereqChoiceModal() {
   prereqChoiceBackdrop.setAttribute("aria-hidden", "true");
 }
 
+function openGoalChildChoiceModal(goalId) {
+  if (!prereqChoiceBackdrop) return;
+  prereqState.targetId = String(goalId);
+  const byId = allItemsById.size ? allItemsById : lastItemsById;
+  const item = byId.get(String(goalId));
+  if (prereqChoiceTitle) {
+    prereqChoiceTitle.textContent = item?.title ? `新增子目标：${item.title}` : "新增子目标";
+  }
+  if (prereqChoiceSub) {
+    prereqChoiceSub.textContent = `目标项目 #${String(goalId)}（子目标将作为其前置项目）`;
+  }
+  if (prereqChoiceHint) {
+    prereqChoiceHint.textContent =
+      "关联已有：从已有项目中选择一个作为该目标的前置项目（不会改变其项目路径）。新建：新建一个子目标项目，放在与该目标同级目录，并自动设置为其前置项目。";
+  }
+  prereqChoiceBackdrop.style.display = "flex";
+  prereqChoiceBackdrop.setAttribute("aria-hidden", "false");
+}
+
 syncDeadlineInputControl();
 renderTableHead({ itemsHeadRow, viewConfig: VIEW_CONFIG });
 updateFilterUpButton();
 
 parentPathBtn?.addEventListener("click", () => openParentPathPicker());
 
+const isE2E = new URLSearchParams(window.location.search).get("e2e") === "1";
+
 // Daily maintenance: roll overdue scheduled items forward once per day.
-await runScheduleRolloverOncePerDay();
+if (!isE2E) {
+  await runScheduleRolloverOncePerDay();
+}
 
 await loadItems();
-await loadTopPriorityItems();
 if (dailyDateInput && !String(dailyDateInput.value || "").trim()) {
   dailyDateInput.value = yyyyMmDd(new Date());
 }
-await loadDailyItems();
+if (!isE2E) {
+  await refreshSidePanels();
+  await refreshBackupStatus();
+}
 
 function setTopPanel(mode) {
   topPanelMode = mode;
   const isPriority = mode === "priority";
   const isDaily = mode === "daily";
   const isFilter = mode === "filter";
+  const isGoalLine = mode === "goalLine";
   if (priorityPanel) priorityPanel.style.display = isPriority ? "" : "none";
   if (dailyPanel) dailyPanel.style.display = isDaily ? "" : "none";
   if (filterPanel) filterPanel.style.display = isFilter ? "" : "none";
+  if (goalLinePanelEl) goalLinePanelEl.style.display = isGoalLine ? "" : "none";
   if (switchToPriorityBtn) switchToPriorityBtn.classList.toggle("primary", isPriority);
   if (switchToDailyBtn) switchToDailyBtn.classList.toggle("primary", isDaily);
   if (switchToFilterBtn) switchToFilterBtn.classList.toggle("primary", isFilter);
-  if (switcherTitle) switcherTitle.textContent = isPriority ? "高优先级项目" : isDaily ? "日程面板" : "Filter";
+  if (switchToGoalLineBtn) switchToGoalLineBtn.classList.toggle("primary", isGoalLine);
+  if (switcherTitle) {
+    switcherTitle.textContent = isPriority
+      ? "高优先级项目"
+      : isDaily
+        ? "日程面板"
+        : isGoalLine
+          ? "目标主线"
+          : "Filter";
+  }
   if (switcherSub) {
     switcherSub.textContent = isPriority
       ? "展示全局优先级 TopN（只显示标题，可快速定位到所在目录）"
       : isDaily
         ? "选择日期，查看计划在当天执行的项目（含阻塞项目）"
-        : "按目录/状态/标题/详情筛选项目列表";
+        : isGoalLine
+          ? "每个「目标（主线）」可挂在管理项目下；同一管理下可有多个目标，并横向查看分解树与进度"
+          : "按目录/状态/标题/详情筛选项目列表";
   }
 }
 
@@ -1130,18 +1829,296 @@ switchToDailyBtn?.addEventListener("click", () => {
   loadDailyItems();
 });
 switchToFilterBtn?.addEventListener("click", () => setTopPanel("filter"));
+switchToGoalLineBtn?.addEventListener("click", async () => {
+  setTopPanel("goalLine");
+  await loadGoalLinePanel();
+});
 
-priorityRefreshBtn?.addEventListener("click", () => {
+goalLineRootSelect?.addEventListener("change", () => {
+  const v = String(goalLineRootSelect.value || "").trim();
+  if (!v) return;
+  try {
+    window.localStorage.setItem(GOAL_LINE_SELECTED_KEY, v);
+  } catch {
+    // ignore
+  }
+  loadGoalLinePanel();
+});
+
+goalLineNewBtn?.addEventListener("click", () => openGoalNewChoiceModal());
+
+goalNewChoiceCloseBtn?.addEventListener("click", () => closeGoalNewChoiceModal());
+goalNewChoiceCancelBtn?.addEventListener("click", () => closeGoalNewChoiceModal());
+goalNewChoiceBackdrop?.addEventListener("click", (e) => {
+  if (e.target === goalNewChoiceBackdrop) closeGoalNewChoiceModal();
+});
+
+goalNewChoiceCreateBtn?.addEventListener("click", async () => {
+  closeGoalNewChoiceModal();
+  resetForm();
+  if (projectCategorySelect) projectCategorySelect.value = "4";
+  projectStatusSelect.value = "3";
+  let parentDefault = "";
+  const rid = itemsRootIdInput ? itemsRootIdInput.value.trim() : "";
+  if (rid) {
+    const byId = await getAllItemsCached();
+    const cur = byId.get(rid);
+    if (cur && String(cur.project_category ?? "2").trim() === "1") {
+      parentDefault = rid;
+    }
+  }
+  setFormParentById(parentDefault);
+  formModal.open({
+    title: "新建目标（主线）",
+    sub: parentDefault
+      ? `默认上级为当前管理项目 #${parentDefault}（可在表单中修改）`
+      : "未检测到当前目录为管理项目时，默认无上级（可在表单中指定挂到管理项目下）",
+  });
+  titleInput.focus();
+});
+
+goalNewChoiceLinkBtn?.addEventListener("click", () => {
+  closeGoalNewChoiceModal();
+  openGoalRootPickModal();
+});
+
+goalLineRefreshBtn?.addEventListener("click", async () => {
   allItemsCache.clear();
-  loadTopPriorityItems();
+  await loadGoalLinePanel();
+});
+
+goalLineToggleAllBtn?.addEventListener("click", async () => {
+  goalLineShowAllRoots = !goalLineShowAllRoots;
+  await loadGoalLinePanel();
+});
+
+async function onGoalLineBoardClick(e) {
+  const t = e.target;
+  if (!(t instanceof Element)) return;
+  const btn = t.closest("button[data-goal-action][data-id]");
+  if (!(btn instanceof HTMLElement)) return;
+  const action = btn.getAttribute("data-goal-action");
+  const id = btn.getAttribute("data-id");
+  if (!action || !id) return;
+
+  const byId = await getAllItemsCached();
+  const item = byId.get(String(id));
+  if (!item) return alert("找不到该项目（请先刷新）");
+
+  if (action === "locate") {
+    const parentId = firstIdFromCsv(item.parent_ids);
+    if (itemsRootIdInput) itemsRootIdInput.value = parentId;
+    if (itemsShowAllCheckbox) itemsShowAllCheckbox.checked = true;
+    locatedItemId = String(id);
+    ensureStatusChecked(String(item.project_status ?? "0"));
+    updateFilterUpButton();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    await loadItems();
+    return;
+  }
+
+  if (action === "detail") {
+    detailModal.open(item);
+    return;
+  }
+
+  if (action === "add-child") {
+    // 子目标：作为“前置项目”关联到该目标；关联已有不改路径；新建则放到与目标同级目录
+    openGoalChildChoiceModal(id);
+    return;
+  }
+
+  if (action === "detach") {
+    const rid = String(goalLineRootSelect?.value || "").trim();
+    const titleHint = item?.title ? `「${String(item.title)}」` : `#${id}`;
+    if (!confirm(`删除目标：将断开 ${titleHint} 与其上级节点的前置关联（不会删除项目本身），确定？`)) {
+      return;
+    }
+
+    const targetId = String(id);
+    const upstreams = Array.from(byId.values()).filter((it) => {
+      const pid = String(it?.id ?? "");
+      if (!pid || pid === targetId) return false;
+      const prereqs = String(it?.prerequisite_ids || "")
+        .split(";")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return prereqs.includes(targetId);
+    });
+
+    if (upstreams.length === 0) {
+      alert("未找到上级节点（没有项目将其作为前置）。");
+      return;
+    }
+
+    try {
+      for (const up of upstreams) {
+        const prereqs = String(up?.prerequisite_ids || "")
+          .split(";")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .filter((x) => x !== targetId);
+        const next = Array.from(new Set(prereqs)).sort((a, b) => Number(a) - Number(b)).join(";");
+        const payload = putPayloadForUpdateFromItem(up);
+        payload.prerequisite_ids = next;
+        await updateItem(String(up.id), payload);
+      }
+    } catch (e2) {
+      alert(String(e2?.message || e2 || "删除目标失败"));
+      return;
+    }
+
+    invalidateAllItemsCache();
+    await loadItems();
+    await refreshSidePanels();
+    if (topPanelMode === "goalLine") await loadGoalLinePanel();
+    if (rid) {
+      try {
+        window.localStorage.setItem(GOAL_LINE_SELECTED_KEY, rid);
+      } catch {
+        // ignore
+      }
+    }
+    return;
+  }
+
+  if (action === "plan") {
+    // 待开始 -> 计划中，并加入今日日程
+    try {
+      await patchStatus(id, "3");
+      await patchSchedule(id, yyyyMmDd(new Date()));
+    } catch (e2) {
+      alert(String(e2?.message || e2 || "计划失败"));
+      return;
+    }
+    invalidateAllItemsCache();
+    await loadItems();
+    await refreshSidePanels();
+    return;
+  }
+
+  if (action === "pause") {
+    const st = String(item.project_status ?? "0");
+    try {
+      if (st === "1") {
+        await patchStatus(id, "3");
+      } else if (st === "3") {
+        // 计划中 → 清空计划日，后端将状态置为待开始（与日程「暂停」语义一致：退出当前排期）
+        await patchSchedule(id, "");
+      } else {
+        return;
+      }
+    } catch (e2) {
+      const msg = String(e2?.message || e2 || "暂停失败");
+      const hint =
+        msg.includes("进行中项目数量已达上限") || msg.includes("上限")
+          ? "\n\n可将部分「进行中」项目改为「计划中」后再试。"
+          : "";
+      alert(msg + hint);
+      return;
+    }
+    invalidateAllItemsCache();
+    await loadItems();
+    await refreshSidePanels();
+    return;
+  }
+
+  if (action === "start") {
+    if (String(item.project_status ?? "0") === "4") {
+      const blockedBy = String(item.blocked_by_ids ?? "").trim();
+      const msg = blockedBy
+        ? `该项目处于阻塞状态，当前被以下前置项目阻塞：${blockedBy}。请先完成前置项目。`
+        : "该项目处于阻塞状态，请先完成前置项目。";
+      alert(msg);
+      return;
+    }
+    try {
+      const updated = await patchStatus(id, "1");
+      const hasDate = String(updated?.planned_execute_date || "").trim();
+      if (!hasDate) {
+        await patchSchedule(id, yyyyMmDd(new Date()));
+      }
+    } catch (e2) {
+      const msg = String(e2?.message || e2 || "开始失败");
+      const hint =
+        msg.includes("进行中项目数量已达上限") || msg.includes("上限")
+          ? "\n\n可将部分「进行中」项目改为「计划中」后再试。"
+          : "";
+      alert(msg + hint);
+      return;
+    }
+    invalidateAllItemsCache();
+    await loadItems();
+    await refreshSidePanels();
+    return;
+  }
+
+  if (action === "undo-complete") {
+    try {
+      await patchStatus(id, "3");
+    } catch (e2) {
+      alert(String(e2?.message || e2 || "撤销完成失败"));
+      return;
+    }
+    invalidateAllItemsCache();
+    await loadItems();
+    await refreshSidePanels();
+    return;
+  }
+
+  if (action === "complete") {
+    if (String(item.project_status ?? "0") === "4") {
+      const blockedBy = String(item.blocked_by_ids ?? "").trim();
+      const msg = blockedBy
+        ? `该项目处于阻塞状态，当前被以下前置项目阻塞：${blockedBy}。请先完成前置项目。`
+        : "该项目处于阻塞状态，请先完成前置项目。";
+      alert(msg);
+      return;
+    }
+    try {
+      await patchStatus(id, "2");
+    } catch (e2) {
+      alert(String(e2?.message || e2 || "完成失败"));
+      return;
+    }
+    invalidateAllItemsCache();
+    await loadItems();
+    await refreshSidePanels();
+    return;
+  }
+
+  // (attach action removed; kept for backward compatibility if stale DOM exists)
+  if (action === "attach") {
+    openPrereqPicker(id);
+  }
+}
+
+goalLineBoardScroll?.addEventListener("click", onGoalLineBoardClick);
+goalLineBoard?.addEventListener("click", onGoalLineBoardClick);
+
+window.addEventListener("resize", () => {
+  if (topPanelMode !== "goalLine") return;
+  // small debounce
+  window.clearTimeout(window.__goalLineRedrawT);
+  window.__goalLineRedrawT = window.setTimeout(async () => {
+    const byId = await getAllItemsCached();
+    const rid = String(goalLineRootSelect?.value || "").trim();
+    if (!rid) return;
+    redrawGoalLineConnections({ itemsById: byId, rootId: rid });
+  }, 120);
+});
+
+priorityRefreshBtn?.addEventListener("click", async () => {
+  allItemsCache.clear();
+  await refreshSidePanels();
 });
 priorityLimitInput?.addEventListener("change", () => loadTopPriorityItems());
 priorityIncludeInProgress?.addEventListener("change", () => loadTopPriorityItems());
 
 dailyDateInput?.addEventListener("change", () => loadDailyItems());
-dailyRefreshBtn?.addEventListener("click", () => {
+dailyRefreshBtn?.addEventListener("click", async () => {
   allItemsCache.clear();
-  loadDailyItems();
+  await refreshSidePanels();
 });
 dailyTodayBtn?.addEventListener("click", () => {
   if (dailyDateInput) dailyDateInput.value = yyyyMmDd(new Date());
@@ -1170,12 +2147,13 @@ filterResultsBody?.addEventListener("click", async (e) => {
   if (!item) return;
 
   // Locate: switch Items list to the item's parent folder (so the item is visible there).
-  const parentId = String(item.parent_ids || "").trim();
+  const parentId = firstIdFromCsv(item.parent_ids);
   if (itemsRootIdInput) itemsRootIdInput.value = parentId;
+  if (itemsShowAllCheckbox) itemsShowAllCheckbox.checked = true;
   locatedItemId = String(id);
   updateFilterUpButton();
-  await loadItems();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  await loadItems();
 });
 
 priorityItemsBody?.addEventListener("click", async (e) => {
@@ -1189,14 +2167,15 @@ priorityItemsBody?.addEventListener("click", async (e) => {
   const item = byId.get(String(id));
   if (!item) return;
 
-  const parentId = String(item.parent_ids || "").trim();
+  const parentId = firstIdFromCsv(item.parent_ids);
   if (itemsRootIdInput) itemsRootIdInput.value = parentId;
+  if (itemsShowAllCheckbox) itemsShowAllCheckbox.checked = true;
   locatedItemId = String(id);
   ensureStatusChecked(String(item.project_status ?? "0"));
 
   updateFilterUpButton();
-  await loadItems();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  await loadItems();
 });
 
 newItemBtn?.addEventListener("click", () => {
@@ -1221,6 +2200,21 @@ newInspireBtn?.addEventListener("click", () => {
   titleInput.focus();
 });
 
+backupNowBtn?.addEventListener("click", async () => {
+  backupNowBtn.disabled = true;
+  try {
+    const res = await fetch("/api/backup", { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data && data.error) || `HTTP ${res.status}`);
+    await refreshBackupStatus();
+    alert("备份已完成。");
+  } catch (e) {
+    alert(String(e?.message || e || "备份失败"));
+  } finally {
+    backupNowBtn.disabled = false;
+  }
+});
+
 formModalCloseBtn?.addEventListener("click", () => formModal.close());
 formModalBackdrop?.addEventListener("click", (e) => {
   if (e.target === formModalBackdrop) formModal.close();
@@ -1240,7 +2234,9 @@ prereqChoiceCreateNewBtn?.addEventListener("click", async () => {
 
   // Ensure path label can resolve (setFormParentById depends on allItemsById).
   await getAllItemsCached();
-  const targetItem = lastItemsById.get(String(targetId));
+  const byId = await getAllItemsCached();
+  const targetItem = byId.get(String(targetId)) || lastItemsById.get(String(targetId));
+  // 子目标新建：放在与目标同级目录（parent_ids = 目标的 parent_ids）
   const defaultParentId = targetItem ? String(targetItem.parent_ids || "").trim() : "";
 
   itemIdInput.value = "";
@@ -1259,7 +2255,10 @@ prereqChoiceCreateNewBtn?.addEventListener("click", async () => {
   if (plannedTimeInput) plannedTimeInput.value = "";
   syncDeadlineInputControl();
   titleInput.focus();
-  formModal.open({ title: `新建前置项目（关联到 #${targetId}）` });
+  formModal.open({
+    title: `新建子目标（将作为 #${targetId} 的前置项目）`,
+    sub: defaultParentId ? `将放在与目标同级目录（上级 #${defaultParentId}）` : "将放在根目录（与目标同级）",
+  });
 });
 
 prereqChoiceLinkExistingBtn?.addEventListener("click", () => {
@@ -1280,13 +2279,14 @@ dailyItemsBody?.addEventListener("click", async (e) => {
     const byId = await getAllItemsCached();
     const item = byId.get(String(id));
     if (!item) return;
-    const parentId = String(item.parent_ids || "").trim();
+    const parentId = firstIdFromCsv(item.parent_ids);
     if (itemsRootIdInput) itemsRootIdInput.value = parentId;
+    if (itemsShowAllCheckbox) itemsShowAllCheckbox.checked = true;
     locatedItemId = String(id);
     ensureStatusChecked(String(item.project_status ?? "0"));
     updateFilterUpButton();
-    await loadItems();
     window.scrollTo({ top: 0, behavior: "smooth" });
+    await loadItems();
     return;
   }
 
@@ -1297,8 +2297,18 @@ dailyItemsBody?.addEventListener("click", async (e) => {
   }
 
   if (action === "daily-pause") {
+    const byId = await getAllItemsCached();
+    const rowItem = byId.get(String(id));
+    if (!rowItem) return;
+    const st = String(rowItem.project_status ?? "0");
     try {
-      await patchStatus(id, "3");
+      if (st === "1") {
+        await patchStatus(id, "3");
+      } else if (st === "3") {
+        await patchSchedule(id, "");
+      } else {
+        return;
+      }
     } catch (e) {
       const msg = String(e?.message || e || "暂停失败");
       const hint =
@@ -1310,8 +2320,7 @@ dailyItemsBody?.addEventListener("click", async (e) => {
     }
     invalidateAllItemsCache();
     await loadItems();
-    await loadTopPriorityItems();
-    await loadDailyItems();
+    await refreshSidePanels();
     return;
   }
 
@@ -1344,8 +2353,7 @@ dailyItemsBody?.addEventListener("click", async (e) => {
     }
     invalidateAllItemsCache();
     await loadItems();
-    await loadTopPriorityItems();
-    await loadDailyItems();
+    await refreshSidePanels();
     return;
   }
 
@@ -1358,8 +2366,7 @@ dailyItemsBody?.addEventListener("click", async (e) => {
     }
     invalidateAllItemsCache();
     await loadItems();
-    await loadTopPriorityItems();
-    await loadDailyItems();
+    await refreshSidePanels();
     return;
   }
 
@@ -1391,8 +2398,7 @@ dailyItemsBody?.addEventListener("click", async (e) => {
     }
     invalidateAllItemsCache();
     await loadItems();
-    await loadTopPriorityItems();
-    await loadDailyItems();
+    await refreshSidePanels();
     return;
   }
 });
@@ -1409,8 +2415,7 @@ scheduleSaveBtn?.addEventListener("click", async () => {
   }
   invalidateAllItemsCache();
   await loadItems();
-  await loadTopPriorityItems();
-  await loadDailyItems();
+  await refreshSidePanels();
   closeScheduleModal();
 });
 
@@ -1431,8 +2436,7 @@ schedulePauseBtn?.addEventListener("click", async () => {
   }
   invalidateAllItemsCache();
   await loadItems();
-  await loadTopPriorityItems();
-  await loadDailyItems();
+  await refreshSidePanels();
   closeScheduleModal();
 });
 
@@ -1447,8 +2451,7 @@ scheduleClearBtn?.addEventListener("click", async () => {
   }
   invalidateAllItemsCache();
   await loadItems();
-  await loadTopPriorityItems();
-  await loadDailyItems();
+  await refreshSidePanels();
   closeScheduleModal();
 });
 

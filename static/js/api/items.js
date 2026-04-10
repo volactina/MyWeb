@@ -9,6 +9,7 @@ async function fetchJson(url, options) {
 }
 
 export function buildItemsListUrl({
+  q,
   title,
   detail,
   rootId,
@@ -20,11 +21,12 @@ export function buildItemsListUrl({
   if (rootId) params.set("root_id", String(rootId).trim());
   if (parentId) params.set("parent_id", String(parentId).trim());
   if (Array.isArray(statuses) && statuses.length > 0) params.set("statuses", statuses.map(String).join(","));
+  if (q) params.set("q", String(q).trim());
   if (title) params.set("title", String(title).trim());
   if (detail) params.set("detail", String(detail).trim());
   if (all) params.set("all", "1");
-  const q = params.toString();
-  return q ? `/api/items?${q}` : "/api/items";
+  const qs = params.toString();
+  return qs ? `/api/items?${qs}` : "/api/items";
 }
 
 export async function listItems(filters = {}) {

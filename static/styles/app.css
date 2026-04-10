@@ -131,6 +131,30 @@ button.primary {
   font-weight: 650;
 }
 
+/* Make export link look like a button */
+.actions a.button-like {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  text-decoration: none;
+  transition: transform 0.05s ease, background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+.actions a.button-like:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.actions a.button-like:active {
+  transform: translateY(1px);
+}
+
 button.danger {
   background: rgba(255, 77, 79, 0.14);
   border-color: rgba(255, 77, 79, 0.35);
@@ -353,5 +377,122 @@ tbody tr.locate-highlight {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+/* ---- Goal line (主线) panel ---- */
+.goal-line-toolbar .goal-line-select-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.goal-line-progress-wrap {
+  margin-top: 12px;
+}
+
+.goal-line-progress-text {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.goal-line-progress-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.goal-line-progress-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary-2), var(--primary));
+  transition: width 0.25s ease;
+}
+
+.goal-line-board-scroll {
+  margin-top: 14px;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.goal-line-board {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0;
+  min-height: 120px;
+}
+
+.goal-line-column {
+  flex: 0 0 auto;
+  min-width: 240px;
+  max-width: 280px;
+  padding: 0 12px;
+  position: relative;
+}
+
+.goal-line-column:not(:first-child) {
+  border-left: 2px solid rgba(91, 140, 255, 0.08);
+}
+
+.goal-line-column-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.goal-line-card {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 10px 12px;
+  position: relative;
+}
+
+.goal-line-card::before {
+  display: none;
+}
+
+.goal-line-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.goal-line-card-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.goal-line-card-title span:last-child {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.goal-line-card-id {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.goal-line-card-actions {
+  margin-top: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.goal-line-card-actions button {
+  font-size: 12px;
+  padding: 4px 8px;
 }
 

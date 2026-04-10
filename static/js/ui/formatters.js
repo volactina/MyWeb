@@ -12,6 +12,7 @@ const PROJECT_CATEGORY_LABELS = {
   1: "1 - 管理项目",
   2: "2 - 执行项目（缺省值）",
   3: "3 - 灵感项目",
+  4: "4 - 目标（主线）",
 };
 
 export function formatEconomicBenefitExpectation(item) {

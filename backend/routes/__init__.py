@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, render_template
 
 from .items import register_item_routes
+from .backup import register_backup_routes
 
 
 bp = Blueprint("api", __name__)
@@ -14,4 +15,5 @@ def home():
 
 
 register_item_routes(bp)
+register_backup_routes(bp)
 

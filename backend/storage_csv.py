@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from .normalize import CSV_HEADERS, normalize_item
+from .utils.atomic_write import atomic_write_text
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -67,8 +68,10 @@ def read_items_raw() -> tuple[list[Dict[str, str]], list[str]]:
 def write_items_raw(items: List[Dict[str, str]]) -> None:
     data_file = get_data_file()
     data_file.parent.mkdir(parents=True, exist_ok=True)
-    with data_file.open("w", newline="", encoding="utf-8") as f:
+    def _write(f) -> None:
         writer = csv.DictWriter(f, fieldnames=CSV_HEADERS)
         writer.writeheader()
         writer.writerows(items)
+
+    atomic_write_text(data_file, newline="", encoding="utf-8", write_fn=_write)
 

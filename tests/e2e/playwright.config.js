@@ -15,7 +15,7 @@ const config = {
   webServer: {
     command: "python3 app.py",
     url: "http://127.0.0.1:5001/",
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     cwd: path.resolve(__dirname, "../.."),
     env: {
       ...process.env,
